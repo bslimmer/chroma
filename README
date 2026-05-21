@@ -62,5 +62,10 @@ You can execute the program simply by
 which will compute the average plaquette on a random gauge
 field and write the result into  "t_mesplq.xml" .
 
+For the tested local CMake recipe used in this checkout, including the
+QDPXX branch and temporary-path workarounds needed to build and run
+`t_temporal_zone_gaugebc` and `t_leapfrog`, see
+`docs/build_local_qdpxx.md` and
+`scripts/bootstrap_local_qdpxx_build.sh`.
 
 %

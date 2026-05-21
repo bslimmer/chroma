@@ -25,10 +25,11 @@ set(ChromaSingleExecs
     t_dwflocality
     t_precact_4d
     t_precact_5d
-    t_gauge_force
-    t_stout_state
-    t_aniso_gaugeact
-    t_temp_prec
+	t_gauge_force
+	t_temporal_zone_gaugebc
+	t_stout_state
+	t_aniso_gaugeact
+	t_temp_prec
     t_multishift_quda
     t_invmdagm_quda
 )

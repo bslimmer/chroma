@@ -154,8 +154,6 @@ namespace Chroma
   {
 #ifndef QDP_IS_QDPJIT
     LatticeFermion tmp;
-    Gamma g4(8); // gamma_4
-    Gamma g3(4); // gamma_3
     
     for(int tt=0; tt < QDP::Layout::subgridLattSize()[3]; ++tt)
     {
@@ -181,13 +179,13 @@ namespace Chroma
 
 	  if (isign == PLUS)
 	  {
-	    tmp.elem(site) = g4 * psi.elem(site_n);
-	    chi.elem(site) += tmp.elem(site) + g3 * tmp.elem(site);
+	    tmp.elem(site) = GammaConst<4,8>() * psi.elem(site_n);
+	    chi.elem(site) += tmp.elem(site) + GammaConst<4,4>() * tmp.elem(site);
 	  }
 	  else
 	  {
-	    tmp.elem(site) = g4 * psi.elem(site_n);
-	    chi.elem(site) += tmp.elem(site) - g3 * tmp.elem(site);
+	    tmp.elem(site) = GammaConst<4,8>() * psi.elem(site_n);
+	    chi.elem(site) += tmp.elem(site) - GammaConst<4,4>() * tmp.elem(site);
 	  }
 	}
       }

@@ -181,6 +181,7 @@ nobase_include_HEADERS = \
 	actions/gauge/gaugebcs/gaugebc_factory.h \
 	actions/gauge/gaugebcs/simple_gaugebc.h \
 	actions/gauge/gaugebcs/periodic_gaugebc.h \
+	actions/gauge/gaugebcs/temporal_zone_gaugebc.h \
 	actions/gauge/gaugebcs/schroedinger_gaugebc.h \
 	actions/gauge/gaugebcs/schr_gaugebc_params.h \
 	actions/gauge/gaugebcs/schr_sf_gaugebc.h \
@@ -1227,6 +1228,7 @@ libchroma_a_SOURCES = \
 	actions/gauge/gaugebcs/gaugebc_aggregate.cc \
 	actions/gauge/gaugebcs/periodic_gaugebc.cc \
 	actions/gauge/gaugebcs/simple_gaugebc.cc \
+	actions/gauge/gaugebcs/temporal_zone_gaugebc.cc \
 	actions/gauge/gaugebcs/schroedinger_gaugebc.cc \
 	actions/gauge/gaugebcs/schr_gaugebc_params.cc \
 	actions/gauge/gaugebcs/schr_sf_gaugebc.cc \

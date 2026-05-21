@@ -6,6 +6,7 @@
 #include "actions/gauge/gaugebcs/gaugebc_aggregate.h"
 #include "actions/gauge/gaugebcs/simple_gaugebc.h"
 #include "actions/gauge/gaugebcs/periodic_gaugebc.h"
+#include "actions/gauge/gaugebcs/temporal_zone_gaugebc.h"
 #include "actions/gauge/gaugebcs/schr_triv_gaugebc.h"
 #include "actions/gauge/gaugebcs/schr_nonpert_gaugebc.h"
 #include "actions/gauge/gaugebcs/schr_coupling_gaugebc.h"
@@ -30,6 +31,7 @@ namespace Chroma
       {
 	success &= SimpleGaugeBCEnv::registerAll();
 	success &= PeriodicGaugeBCEnv::registerAll();
+	success &= TemporalZoneGaugeBCEnv::registerAll();
 	success &= SchrTrivialGaugeBCEnv::registerAll();
 	success &= SchrNonPertGaugeBCEnv::registerAll();
 	success &= SchrCouplingGaugeBCEnv::registerAll();
