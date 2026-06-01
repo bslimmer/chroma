@@ -29,11 +29,6 @@ namespace Chroma
       os << "[" << interval.t_start << "," << interval.t_end << "]";
       return os.str();
     }
-
-    int entrySlice(const TemporalZoneInterval& interval, int t_extent)
-    {
-      return (interval.t_start + t_extent - 1) % t_extent;
-    }
   }
 
   namespace TemporalZoneGaugeBCEnv
@@ -153,19 +148,15 @@ namespace Chroma
 
     LatticeInteger t = Layout::latticeCoordinate(param.t_dir);
     LatticeBoolean site_mask = false;
-    LatticeBoolean t_entry_mask = false;
 
     for (int i = 0; i < param.zero_intervals.size(); ++i)
     {
       const TemporalZoneInterval& interval = param.zero_intervals[i];
       site_mask |= (t >= interval.t_start) && (t <= interval.t_end);
-      t_entry_mask |= (t == entrySlice(interval, t_extent));
     }
 
     for (int mu = 0; mu < Nd; ++mu)
       mask[mu] = site_mask;
-
-    mask[param.t_dir] |= t_entry_mask;
   }
 
   void TemporalZoneGaugeBC::modify(multi1d<LatticeColorMatrix>& u) const

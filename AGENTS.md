@@ -33,7 +33,7 @@ The current feature work is centered on a new force-suppression gauge boundary c
 
 Important behavior note:
 
-- `TEMPORAL_ZONE_GAUGEBC` currently uses `GaugeBC::zero(P&)` to suppress gauge-like force/update fields on selected time intervals plus the incoming time-direction links.
+- `TEMPORAL_ZONE_GAUGEBC` currently uses `GaugeBC::zero(P&)` to suppress gauge-like force/update fields on the selected time intervals only.
 - It does not modify the stored gauge links in `modify(Q&)`.
 
 ## Build And Test

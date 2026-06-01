@@ -28,27 +28,18 @@ namespace
     return os.str();
   }
 
-  int entrySlice(const TemporalZoneInterval& interval, int t_extent)
-  {
-    return (interval.t_start + t_extent - 1) % t_extent;
-  }
-
-  LatticeBoolean buildDirMask(const TemporalZoneGaugeBCParams& params, int mu)
+  LatticeBoolean buildSiteMask(const TemporalZoneGaugeBCParams& params)
   {
     LatticeInteger t = Layout::latticeCoordinate(params.t_dir);
-    LatticeBoolean mask = false;
-    const int t_extent = Layout::lattSize()[params.t_dir];
+    LatticeBoolean site_mask = false;
 
     for (int i = 0; i < params.zero_intervals.size(); ++i)
     {
       const TemporalZoneInterval& interval = params.zero_intervals[i];
-      mask |= (t >= interval.t_start) && (t <= interval.t_end);
-
-      if (mu == params.t_dir)
-        mask |= (t == entrySlice(interval, t_extent));
+      site_mask |= (t >= interval.t_start) && (t <= interval.t_end);
     }
 
-    return mask;
+    return site_mask;
   }
 
   void verifyZeroing(const TemporalZoneGaugeBCParams& params,
@@ -82,10 +73,10 @@ namespace
 
     for (int mu = 0; mu < Nd; ++mu)
     {
-      LatticeBoolean dir_mask = buildDirMask(params, mu);
+      LatticeBoolean site_mask = buildSiteMask(params);
       Double modify_diff = norm2(u[mu] - u_before[mu]);
-      Double masked_norm = norm2(where(dir_mask, ds_u[mu], z));
-      Double unmasked_diff = norm2(where(dir_mask, z, ds_u[mu] - ds_u_before[mu]));
+      Double masked_norm = norm2(where(site_mask, ds_u[mu], z));
+      Double unmasked_diff = norm2(where(site_mask, z, ds_u[mu] - ds_u_before[mu]));
 
       push(xml_out, "Direction");
       write(xml_out, "mu", mu);
@@ -159,19 +150,17 @@ int main(int argc, char *argv[])
 
   TemporalZoneGaugeBCParams non_wrap_params;
   non_wrap_params.zero_intervals.resize(1);
-  non_wrap_params.zero_intervals[0].t_start = 1;
-  non_wrap_params.zero_intervals[0].t_end = 2;
-  verifyZeroing(non_wrap_params, "SingleIntervalWithEntryLink", xml_out);
+  non_wrap_params.zero_intervals[0].t_start = 0;
+  non_wrap_params.zero_intervals[0].t_end = 1;
+  verifyZeroing(non_wrap_params, "SingleInterval", xml_out);
 
   TemporalZoneGaugeBCParams overlap_params;
   overlap_params.zero_intervals.resize(2);
-  overlap_params.zero_intervals[0].t_start = 1;
-  overlap_params.zero_intervals[0].t_end = 2;
-  overlap_params.zero_intervals[1].t_start = 2;
-  overlap_params.zero_intervals[1].t_end = 3;
+  overlap_params.zero_intervals[0].t_start = 0;
+  overlap_params.zero_intervals[0].t_end = 1;
+  overlap_params.zero_intervals[1].t_start = 1;
+  overlap_params.zero_intervals[1].t_end = 2;
   verifyZeroing(overlap_params, "OverlappingIntervals", xml_out);
-
-  verifyZeroing(parsed_params, "WraparoundEntryLink", xml_out);
 
   pop(xml_out);
   xml_out.close();
