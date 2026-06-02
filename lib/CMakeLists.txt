@@ -453,6 +453,7 @@ set(ChromaLIB_HEADERS
 	util/gauge/conjgauge.h
 	util/gauge/constgauge.h
 	util/gauge/stout_utils.h
+	util/gauge/gauge_subdomain_split.h
 	util/gauge/key_glue_matelem.h
 	util/gauge/key_timeslice_gauge.h
   	util/info/info.h
@@ -1397,6 +1398,7 @@ target_sources(chromalib PRIVATE
 	util/gauge/conjgauge.cc util/gauge/constgauge.cc 
 	util/gauge/weak_field.cc 
 	util/gauge/stout_utils.cc 
+	util/gauge/gauge_subdomain_split.cc 
 	util/gauge/key_glue_matelem.cc 
 	util/gauge/key_timeslice_gauge.cc 
 	util/info/printgeom.cc 

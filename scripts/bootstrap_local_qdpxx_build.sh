@@ -53,8 +53,9 @@ Usage: $(basename "$0") [bootstrap|build-tests|run-tests|all]
 
 bootstrap   Build and install QDPXX, write the CMake wrapper package, and
             configure Chroma in ${CHROMA_BUILD}.
-build-tests bootstrap, then build t_temporal_zone_gaugebc and t_leapfrog.
-run-tests   build-tests, then run both tests.
+build-tests bootstrap, then build t_temporal_zone_gaugebc,
+            t_gauge_subdomain_split, and t_leapfrog.
+run-tests   build-tests, then run all three tests.
 all         same as run-tests.
 
 Environment overrides:
@@ -202,7 +203,7 @@ build_tests() {
 
   say "Building test targets"
   cmake --build "${CHROMA_BUILD}" \
-    --target t_temporal_zone_gaugebc t_leapfrog \
+    --target t_temporal_zone_gaugebc t_gauge_subdomain_split t_leapfrog \
     -j"${JOBS}"
 }
 
@@ -211,6 +212,9 @@ run_tests() {
 
   say "Running t_temporal_zone_gaugebc"
   "${CHROMA_BUILD}/mainprogs/tests/t_temporal_zone_gaugebc"
+
+  say "Running t_gauge_subdomain_split"
+  "${CHROMA_BUILD}/mainprogs/tests/t_gauge_subdomain_split"
 
   say "Running t_leapfrog temporal-zone smoke test"
   "${CHROMA_BUILD}/mainprogs/tests/t_leapfrog" \
@@ -222,6 +226,7 @@ run_tests() {
 
 Outputs:
   t_temporal_zone_gaugebc: ${CHROMA_BUILD}/mainprogs/tests/t_temporal_zone_gaugebc
+  t_gauge_subdomain_split: ${CHROMA_BUILD}/mainprogs/tests/t_gauge_subdomain_split
   t_leapfrog log xml:      ${LEAPFROG_LOG}
   t_leapfrog output xml:   ${LEAPFROG_OUT}
 EOF

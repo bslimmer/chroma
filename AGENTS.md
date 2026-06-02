@@ -10,7 +10,7 @@ This file is the working handoff for humans and coding agents contributing to th
 
 ## Repo Map
 
-- `lib/`: core library code. Gauge boundary-condition work lives under `lib/actions/gauge/gaugebcs/`.
+- `lib/`: core library code. Gauge boundary-condition work lives under `lib/actions/gauge/gaugebcs/`. Gauge split/stitch utility work lives under `lib/util/gauge/`.
 - `mainprogs/main/`: production executables.
 - `mainprogs/tests/`: focused test executables and small integration checks.
 - `tests/`: XML inputs, reference outputs, and regression fixtures.
@@ -22,19 +22,26 @@ This file is the working handoff for humans and coding agents contributing to th
 
 ## Current Workstream
 
-The current feature work is centered on a new force-suppression gauge boundary condition:
+The current feature work is centered on two related gauge-only temporal-boundary efforts:
 
-- public XML/factory name: `TEMPORAL_ZONE_GAUGEBC`
-- implementation: `lib/actions/gauge/gaugebcs/temporal_zone_gaugebc.{h,cc}`
-- factory wiring: `lib/actions/gauge/gaugebcs/gaugebc_aggregate.cc` and `lib/actions/gauge/gaugebcs/gaugebcs.h`
-- focused test executable: `mainprogs/tests/t_temporal_zone_gaugebc.cc`
-- smoke input: `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`
-- spec: `specs/hier/temporal_zone_gaugebc.md`
+- force-suppression gauge boundary condition:
+  - public XML/factory name: `TEMPORAL_ZONE_GAUGEBC`
+  - implementation: `lib/actions/gauge/gaugebcs/temporal_zone_gaugebc.{h,cc}`
+  - factory wiring: `lib/actions/gauge/gaugebcs/gaugebc_aggregate.cc` and `lib/actions/gauge/gaugebcs/gaugebcs.h`
+  - focused test executable: `mainprogs/tests/t_temporal_zone_gaugebc.cc`
+  - smoke input: `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`
+  - spec: `specs/hier/temporal_zone_gaugebc.md`
+- temporal gauge split/stitch utility:
+  - public utility names: `splitGaugeSubdomains(...)` and `stitchGaugeSubdomains(...)`
+  - implementation: `lib/util/gauge/gauge_subdomain_split.{h,cc}`
+  - focused test executable: `mainprogs/tests/t_gauge_subdomain_split.cc`
+  - spec: `specs/hier/gauge_subdomain_split.md`
 
 Important behavior note:
 
 - `TEMPORAL_ZONE_GAUGEBC` currently uses `GaugeBC::zero(P&)` to suppress gauge-like force/update fields on the selected time intervals only.
 - It does not modify the stored gauge links in `modify(Q&)`.
+- `gauge_subdomain_split` currently targets an in-memory gauge-only split/stitch workflow and depends on layout switching. Child gauge fields are stored as `multi1d<LatticeColorMatrix>` with metadata describing their child-local temporal ordering.
 
 ## Build And Test
 
@@ -62,6 +69,7 @@ Notes about the current recipe:
 Current verification targets:
 
 - `t_temporal_zone_gaugebc` should exit successfully.
+- `t_gauge_subdomain_split` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
 
 Legacy build context still matters:
@@ -75,6 +83,7 @@ Legacy build context still matters:
 - When adding or removing test executables, update both `mainprogs/tests/Makefile.am` and `mainprogs/tests/CMakeLists.txt`.
 - Factory-registered features should be wired into the relevant aggregate registration point and umbrella include header, not only added as standalone files.
 - XML-facing features should usually ship with both a focused executable test and a smoke or regression XML input under `tests/`.
+- Utilities that switch `Layout` internally should document which lattice extent must be active before their returned `Lattice*` objects are used.
 - If the intended behavior is still being reasoned through, capture it in `specs/hier/*.md` rather than leaving it only in chat history.
 - Prefer changing real source under `lib/`, `mainprogs/`, `tests/`, `docs/`, and `specs/`. Avoid editing `build/deps/src/qdpxx` unless you are intentionally changing the local dependency workflow.
 

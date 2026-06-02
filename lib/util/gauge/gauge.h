@@ -31,6 +31,7 @@
 #include "expm12.h"
 #include "expsu3.h"
 #include "expmat.h"
+#include "gauge_subdomain_split.h"
 #include "hotst.h"
 #include "reunit.h"
 #include "unit_check.h"
@@ -44,5 +45,4 @@
 #include "gauge_s.h"
 
 #endif
-
 
