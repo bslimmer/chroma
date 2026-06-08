@@ -143,7 +143,7 @@ HDRS =
 bin_PROGRAMS = chroma  \
         purgaug \
         cfgtransf \
-        const_hmc hmc smd spectrum_s
+        const_hmc hmc subdomain_hmc smd spectrum_s
 bin_PROGRAMS += compare_gauge
 
 # Wilson specific programs
@@ -180,6 +180,7 @@ collect_propcomp_SOURCES = collect_propcomp.cc
 collect_multi_propcomp_SOURCES = collect_multi_propcomp.cc
 spectrum_s_SOURCES= spectrum_s.cc
 hmc_SOURCES= hmc.cc
+subdomain_hmc_SOURCES= subdomain_hmc.cc
 smd_SOURCES= smd.cc
 const_hmc_SOURCES= const_hmc.cc
 purgaug_SOURCES= purgaug.cc

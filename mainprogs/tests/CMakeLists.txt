@@ -28,6 +28,7 @@ set(ChromaSingleExecs
 	t_gauge_force
 	t_temporal_zone_gaugebc
 	t_gauge_subdomain_split
+	t_subdomain_fixed_gaugebc
 	t_stout_state
 	t_aniso_gaugeact
 	t_temp_prec

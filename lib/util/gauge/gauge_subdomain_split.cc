@@ -11,6 +11,40 @@
 namespace Chroma
 {
 
+  void read(XMLReader& xml, const std::string& path, GaugeSubdomainSplitParams& p)
+  {
+    XMLReader paramtop(xml, path);
+    read(paramtop, "t_dir", p.t_dir);
+    read(paramtop, "cut0", p.cut0);
+    read(paramtop, "cut1", p.cut1);
+    read(paramtop, "frozen_width", p.frozen_width);
+  }
+
+  void write(XMLWriter& xml, const std::string& path, const GaugeSubdomainSplitParams& p)
+  {
+    push(xml, path);
+    write(xml, "t_dir", p.t_dir);
+    write(xml, "cut0", p.cut0);
+    write(xml, "cut1", p.cut1);
+    write(xml, "frozen_width", p.frozen_width);
+    pop(xml);
+  }
+
+  void read(XMLReader& xml, const std::string& path, GaugeSubdomainSplitInterval& p)
+  {
+    XMLReader paramtop(xml, path);
+    read(paramtop, "t_start", p.t_start);
+    read(paramtop, "t_end", p.t_end);
+  }
+
+  void write(XMLWriter& xml, const std::string& path, const GaugeSubdomainSplitInterval& p)
+  {
+    push(xml, path);
+    write(xml, "t_start", p.t_start);
+    write(xml, "t_end", p.t_end);
+    pop(xml);
+  }
+
   namespace
   {
     struct HostGaugeField

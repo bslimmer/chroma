@@ -218,6 +218,7 @@ set(ChromaLIB_HEADERS
 	actions/gauge/gaugebcs/simple_gaugebc.h
 	actions/gauge/gaugebcs/periodic_gaugebc.h
 	actions/gauge/gaugebcs/temporal_zone_gaugebc.h
+	actions/gauge/gaugebcs/subdomain_fixed_gaugebc.h
 	actions/gauge/gaugebcs/schroedinger_gaugebc.h
 	actions/gauge/gaugebcs/schr_gaugebc_params.h
 	actions/gauge/gaugebcs/schr_sf_gaugebc.h
@@ -1217,6 +1218,7 @@ target_sources(chromalib PRIVATE
 	actions/gauge/gaugebcs/periodic_gaugebc.cc 
 	actions/gauge/gaugebcs/simple_gaugebc.cc 
 	actions/gauge/gaugebcs/temporal_zone_gaugebc.cc 
+	actions/gauge/gaugebcs/subdomain_fixed_gaugebc.cc 
 	actions/gauge/gaugebcs/schroedinger_gaugebc.cc 
 	actions/gauge/gaugebcs/schr_gaugebc_params.cc 
 	actions/gauge/gaugebcs/schr_sf_gaugebc.cc 

@@ -21,6 +21,7 @@
 #include "simple_gaugebc.h"
 #include "periodic_gaugebc.h"
 #include "temporal_zone_gaugebc.h"
+#include "subdomain_fixed_gaugebc.h"
 #include "schroedinger_gaugebc.h"
 #include "schr_sf_gaugebc.h"
 #include "schr_triv_gaugebc.h"

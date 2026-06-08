@@ -36,6 +36,14 @@ The current feature work is centered on two related gauge-only temporal-boundary
   - implementation: `lib/util/gauge/gauge_subdomain_split.{h,cc}`
   - focused test executable: `mainprogs/tests/t_gauge_subdomain_split.cc`
   - spec: `specs/hier/gauge_subdomain_split.md`
+- subdomain quenched HMC driver:
+  - public executable name: `subdomain_hmc`
+  - main implementation: `mainprogs/main/subdomain_hmc.cc`
+  - child BC helper: `SUBDOMAIN_FIXED_GAUGEBC`
+  - implementation: `lib/actions/gauge/gaugebcs/subdomain_fixed_gaugebc.{h,cc}`
+  - focused helper test: `mainprogs/tests/t_subdomain_fixed_gaugebc.cc`
+  - smoke input: `tests/subdomain_hmc/subdomain_hmc.wilson.ini.xml`
+  - spec: `specs/hier/gauge_subdomain_hmc.md`
 
 Important behavior note:
 
@@ -71,6 +79,13 @@ Current verification targets:
 - `t_temporal_zone_gaugebc` should exit successfully.
 - `t_gauge_subdomain_split` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
+- `t_subdomain_fixed_gaugebc` should exit successfully.
+- `subdomain_hmc` should complete the parent-start split/evolve/stitch/save smoke using `tests/subdomain_hmc/subdomain_hmc.wilson.ini.xml`.
+
+Current known gaps in the new subdomain-HMC work:
+
+- post-stitch parent inline measurements are still unstable; the committed smoke input leaves `PostStitchInlineMeasurements` empty for now.
+- `FROM_CHILD_RESTART` is not yet passing end-to-end; resume currently fails while reading the child restart manifest payloads.
 
 Legacy build context still matters:
 

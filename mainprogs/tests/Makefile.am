@@ -249,6 +249,7 @@ t_hmc_SOURCES = t_hmc.cc
 t_gauge_force_SOURCES = t_gauge_force.cc
 t_temporal_zone_gaugebc_SOURCES = t_temporal_zone_gaugebc.cc
 t_gauge_subdomain_split_SOURCES = t_gauge_subdomain_split.cc
+t_subdomain_fixed_gaugebc_SOURCES = t_subdomain_fixed_gaugebc.cc
 t_circular_buffer_SOURCES = t_circular_buffer.cc
 t_precnef_SOURCES = t_precnef.cc
 t_preccfz_SOURCES = t_preccfz.cc

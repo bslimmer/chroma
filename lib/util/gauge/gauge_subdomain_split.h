@@ -33,6 +33,18 @@ namespace Chroma
   };
 
   /*! @ingroup gauge */
+  void read(XMLReader& xml, const std::string& path, GaugeSubdomainSplitParams& p);
+
+  /*! @ingroup gauge */
+  void write(XMLWriter& xml, const std::string& path, const GaugeSubdomainSplitParams& p);
+
+  /*! @ingroup gauge */
+  void read(XMLReader& xml, const std::string& path, GaugeSubdomainSplitInterval& p);
+
+  /*! @ingroup gauge */
+  void write(XMLWriter& xml, const std::string& path, const GaugeSubdomainSplitInterval& p);
+
+  /*! @ingroup gauge */
   struct GaugeSubdomainSplitChild
   {
     GaugeSubdomainSplitChild();
