@@ -52,6 +52,24 @@ namespace Chroma
     //! Construct out of a parameter struct. Check against the desired GaugeAct name
     GaugeMonomial(const GaugeMonomialParams& param_);
 
+    //! Return the gauge BC used by the wrapped gauge action
+    const GaugeBC<P,Q>& getGaugeBC() const
+    {
+      return getGaugeAct().getGaugeBC();
+    }
+
+    //! Return true when the wrapped gauge BC zeroes momentum-like fields
+    bool hasNontrivialGaugeBC() const
+    {
+      return getGaugeBC().nontrivialP();
+    }
+
+    //! Apply the wrapped gauge BC zeroing behavior to a gauge-like field
+    void zeroGaugeLikeField(P& field) const
+    {
+      getGaugeBC().zero(field);
+    }
+
     //! Copy Constructor
     GaugeMonomial(const GaugeMonomial& m) : gaugeact((m.gaugeact)) {}
 

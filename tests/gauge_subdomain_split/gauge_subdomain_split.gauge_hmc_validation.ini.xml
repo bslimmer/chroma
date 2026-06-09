@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<gauge_subdomain_split>
+  <Parent>
+    <nrow>4 4 4 8</nrow>
+    <Cfg>
+      <cfg_type>UNIT</cfg_type>
+      <cfg_file>DUMMY</cfg_file>
+    </Cfg>
+  </Parent>
+
+  <Param>
+    <t_dir>3</t_dir>
+    <cut0>0</cut0>
+    <cut1>4</cut1>
+    <frozen_width>1</frozen_width>
+  </Param>
+
+  <Child0>
+    <cfg_file>child0.validation.scidac</cfg_file>
+    <volfmt>SINGLEFILE</volfmt>
+  </Child0>
+
+  <Child1>
+    <cfg_file>child1.validation.scidac</cfg_file>
+    <volfmt>SINGLEFILE</volfmt>
+  </Child1>
+
+  <Sidecar>
+    <file>gauge_subdomain_gauge_hmc_validation.sidecar.xml</file>
+  </Sidecar>
+</gauge_subdomain_split>

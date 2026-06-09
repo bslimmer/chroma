@@ -25,8 +25,10 @@ set(ChromaSingleExecs
     t_dwflocality
     t_precact_4d
     t_precact_5d
-    t_gauge_force
+	t_gauge_force
 	t_gauge_subdomain_split
+	t_gauge_subdomain_gauge_hmc_validation
+	t_hmc_momentum_bc_autodiscovery
 	t_temporal_zone_gaugebc
 	t_stout_state
 	t_aniso_gaugeact

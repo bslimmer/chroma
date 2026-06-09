@@ -13,6 +13,7 @@
 #include "update/molecdyn/hamiltonian/abs_hamiltonian.h"
 #include "update/molecdyn/integrator/abs_integrator.h"
 #include "update/molecdyn/hmc/abs_hmc.h"
+#include "update/molecdyn/monomial/gauge_monomial.h"
 #include "handle.h"
 // The accept Reject
 #include "update/molecdyn/hmc/global_metropolis_accrej.h"
@@ -38,10 +39,17 @@ namespace Chroma
 			Handle< AbsMDIntegrator< multi1d<LatticeColorMatrix>, multi1d<LatticeColorMatrix> > >& _MD_int)
 		     : the_MD(_MD_int), the_H_MC(_H_MC) {}
 
+    ConstLatColMatHMCTrj( Handle< AbsHamiltonian< multi1d<LatticeColorMatrix>, multi1d<LatticeColorMatrix> > >& _H_MC,
+			Handle< AbsMDIntegrator< multi1d<LatticeColorMatrix>, multi1d<LatticeColorMatrix> > >& _MD_int,
+			const Handle<GaugeMonomial>& _momentum_mask_source)
+		     : the_MD(_MD_int), the_H_MC(_H_MC), momentum_mask_source(_momentum_mask_source) {}
+
   private:
     Handle< AbsMDIntegrator<multi1d<LatticeColorMatrix>, multi1d<LatticeColorMatrix> > > the_MD; 
 
     Handle< AbsHamiltonian< multi1d<LatticeColorMatrix>, multi1d<LatticeColorMatrix> > > the_H_MC;
+
+    Handle<GaugeMonomial> momentum_mask_source;
   protected:
 
     AbsHamiltonian< multi1d<LatticeColorMatrix>, multi1d<LatticeColorMatrix> >& getMCHamiltonian(void) { 
@@ -82,6 +90,12 @@ namespace Chroma
                          
 	// Make traceless and antihermitian
 	taproj(s.getP()[mu]);
+      }
+
+      if (momentum_mask_source.operator->() != 0 &&
+          momentum_mask_source->hasNontrivialGaugeBC())
+      {
+        momentum_mask_source->zeroGaugeLikeField(s.getP());
       }
     
       END_CODE();

@@ -120,7 +120,7 @@ bin_PROGRAMS = t_mesplq t_lwldslash_sse t_lwldslash_pab t_ritz_KS t_lwldslash_ar
 check_PROGRAMS  = t_io t_mesons_w  t_conslinop t_hypsmear \
     t_ape_smear t_dwf4d t_propagator_s t_disc_loop_s \
     t_remez t_ritz t_dwflocality t_precact_4d t_precact_5d \
-    t_gauge_force t_gauge_subdomain_split t_temporal_zone_gaugebc t_stout_state t_aniso_gaugeact t_temp_prec 
+    t_gauge_force t_gauge_subdomain_split t_gauge_subdomain_gauge_hmc_validation t_hmc_momentum_bc_autodiscovery t_temporal_zone_gaugebc t_stout_state t_aniso_gaugeact t_temp_prec 
 
 # t_meas_wilson_flow_loop
 
@@ -248,6 +248,8 @@ t_leapfrog_SOURCES = t_leapfrog.cc
 t_hmc_SOURCES = t_hmc.cc
 t_gauge_force_SOURCES = t_gauge_force.cc
 t_gauge_subdomain_split_SOURCES = t_gauge_subdomain_split.cc
+t_gauge_subdomain_gauge_hmc_validation_SOURCES = t_gauge_subdomain_gauge_hmc_validation.cc
+t_hmc_momentum_bc_autodiscovery_SOURCES = t_hmc_momentum_bc_autodiscovery.cc
 t_temporal_zone_gaugebc_SOURCES = t_temporal_zone_gaugebc.cc
 t_circular_buffer_SOURCES = t_circular_buffer.cc
 t_precnef_SOURCES = t_precnef.cc

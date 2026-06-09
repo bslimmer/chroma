@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<gauge_subdomain_gauge_hmc_validation>
+  <Sidecar>
+    <file>gauge_subdomain_gauge_hmc_validation.sidecar.xml</file>
+  </Sidecar>
+
+  <Child0Initial>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>child0.validation.scidac</cfg_file>
+  </Child0Initial>
+
+  <Child0Final>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>child0.validation_cfg_2.lime</cfg_file>
+  </Child0Final>
+
+  <Child1Initial>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>child1.validation.scidac</cfg_file>
+  </Child1Initial>
+
+  <Child1Final>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>child1.validation_cfg_2.lime</cfg_file>
+  </Child1Final>
+
+  <Checks>
+    <nontrivial_epsilon>1.0e-8</nontrivial_epsilon>
+    <consistency_epsilon>1.0e-12</consistency_epsilon>
+  </Checks>
+</gauge_subdomain_gauge_hmc_validation>

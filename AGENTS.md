@@ -31,7 +31,10 @@ The current feature work has two closely related threads:
    - focused test executable: `mainprogs/tests/t_temporal_zone_gaugebc.cc`
    - smoke input: `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`
    - spec: `specs/hier/temporal_zone_gaugebc.md`
-   - HMC momentum-hook draft: `specs/hier/hmc_gauge_momentum_bc_autodiscovery.md`
+   - HMC momentum-hook spec: `specs/hier/hmc_gauge_momentum_bc_autodiscovery.md`
+   - HMC momentum-hook helper: `lib/update/molecdyn/hmc/gauge_monomial_momentum_bc.{h,cc}`
+   - HMC/const-HMC wiring: `mainprogs/main/{hmc,const_hmc}.cc` and `lib/update/molecdyn/hmc/{lcm_hmc,const_lcm_hmc}.h`
+   - focused test executable: `mainprogs/tests/t_hmc_momentum_bc_autodiscovery.cc`
 
 2. A gauge subdomain split/stitch workflow for separate child-lattice runs:
    - spec: `specs/hier/gauge_subdomain_split.md`
@@ -40,6 +43,9 @@ The current feature work has two closely related threads:
    - user-facing tools: `mainprogs/main/gauge_subdomain_split.cc` and `mainprogs/main/gauge_subdomain_stitch.cc`
    - focused test executable: `mainprogs/tests/t_gauge_subdomain_split.cc`
    - example tool inputs: `tests/gauge_subdomain_split/gauge_subdomain_split.ini.xml` and `tests/gauge_subdomain_split/gauge_subdomain_stitch.ini.xml`
+   - standalone child-sized HMC smoke input: `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`
+   - child gauge-HMC validation bundle: `tests/gauge_subdomain_split/gauge_subdomain_split.gauge_hmc_validation.ini.xml`, `tests/gauge_subdomain_split/hmc_child{0,1}.temporal_zone.ini.xml`, `tests/gauge_subdomain_split/measure_child{0,1}_plaq_density.ini.xml`, and `tests/gauge_subdomain_split/gauge_subdomain_gauge_hmc_validation.check.ini.xml`
+   - focused validation checker: `mainprogs/tests/t_gauge_subdomain_gauge_hmc_validation.cc`
    - intended workflow: split one parent config into two ordinary child configs, evolve the children in separate runs with frozen temporal boundary intervals, then stitch them back into a parent config
    - first-version assumption: user-facing split/stitch tools write QIO outputs and persist split metadata in a sidecar XML file
    - current validation assumption: child gauge-only HMC must freeze both force and refreshed momentum on the duplicated boundary intervals
@@ -48,7 +54,7 @@ Important behavior note:
 
 - `TEMPORAL_ZONE_GAUGEBC` currently uses `GaugeBC::zero(P&)` to suppress gauge-like force/update fields on the selected time intervals only.
 - It does not modify the stored gauge links in `modify(Q&)`.
-- The planned modern HMC momentum masking path is to autodiscover a compatible gauge-monomial BC source from `Hamiltonian/monomial_ids` rather than introducing separate momentum-BC XML.
+- Modern `hmc` and `const_hmc` now autodiscover a compatible gauge-monomial BC source from `Hamiltonian/monomial_ids` and apply its `zero(P&)` mask to refreshed momenta after `taproj(...)`, with no separate momentum-BC XML.
 
 ## Build And Test
 
@@ -77,7 +83,10 @@ Current verification targets:
 
 - `t_temporal_zone_gaugebc` should exit successfully.
 - `t_gauge_subdomain_split` should exit successfully.
+- `t_gauge_subdomain_gauge_hmc_validation` should complete successfully after running the split plus paired child-HMC validation workflow.
+- `t_hmc_momentum_bc_autodiscovery` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
+- `hmc` should complete a one-update child-sized gauge-only smoke run using `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`.
 
 Legacy build context still matters:
 

@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<chroma>
+  <Param>
+    <InlineMeasurements>
+      <elem>
+        <Name>PLAQ_DENSITY</Name>
+        <Frequency>1</Frequency>
+        <Param>
+          <version>1</version>
+        </Param>
+        <NamedObject>
+          <gauge_id>default_gauge_field</gauge_id>
+          <out_file>child1.validation.plaq_density.xml</out_file>
+        </NamedObject>
+      </elem>
+    </InlineMeasurements>
+    <nrow>4 4 4 5</nrow>
+  </Param>
+  <Cfg>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>child1.validation_cfg_2.lime</cfg_file>
+  </Cfg>
+</chroma>

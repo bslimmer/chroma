@@ -3,6 +3,7 @@
  */
 
 #include "chroma.h"
+#include "update/molecdyn/hmc/gauge_monomial_momentum_bc.h"
 #include <string>
 
 using namespace Chroma;
@@ -824,12 +825,34 @@ int main(int argc, char *argv[])
     QDP_abort(1);
   }
 
-  std::istringstream H_MC_is(trj_params.H_MC_xml);
-  XMLReader H_MC_xml(H_MC_is);
-  ExactHamiltonianParams ham_params(H_MC_xml, "/Hamiltonian");
-    
+  Handle<GaugeMonomial> momentum_mask_source;
   Handle< AbsHamiltonian< multi1d<LatticeColorMatrix>,     
-    multi1d<LatticeColorMatrix> > > H_MC(new ExactHamiltonian(ham_params));
+    multi1d<LatticeColorMatrix> > > H_MC;
+
+  try {
+    std::istringstream H_MC_is(trj_params.H_MC_xml);
+    XMLReader H_MC_xml(H_MC_is);
+    ExactHamiltonianParams ham_params(H_MC_xml, "/Hamiltonian");
+
+    momentum_mask_source =
+      discoverMomentumMaskingGaugeMonomial(ham_params.monomial_ids);
+
+    if (momentum_mask_source.operator->() != 0) {
+      QDPIO::cout << "CONST_HMC: autodiscovered a nontrivial gauge BC source for momentum masking"
+                  << std::endl;
+    }
+    else {
+      QDPIO::cout << "CONST_HMC: no nontrivial gauge BC source found for momentum masking"
+                  << std::endl;
+    }
+
+    H_MC = new ExactHamiltonian(ham_params);
+  }
+  catch(const std::string& e) {
+    QDPIO::cerr << "const_hmc: Caught Exception while constructing Hamiltonian state: "
+                << e << std::endl;
+    QDP_abort(1);
+  }
  
 
   std::istringstream MDInt_is(trj_params.Integrator_xml);
@@ -839,7 +862,7 @@ int main(int argc, char *argv[])
     multi1d<LatticeColorMatrix> > > Integrator(new LCMToplevelIntegrator(int_par));
 
 
-  ConstLatColMatHMCTrj theHMCTrj( H_MC, Integrator );
+  ConstLatColMatHMCTrj theHMCTrj( H_MC, Integrator, momentum_mask_source );
 
  
   multi1d < Handle< AbsInlineMeasurement > > the_measurements;

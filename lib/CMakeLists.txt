@@ -496,6 +496,7 @@ set(ChromaLIB_HEADERS
 	update/molecdyn/integrator/md_integrator_factory.h
 	update/molecdyn/hmc/hmc.h
 	update/molecdyn/hmc/abs_hmc.h
+	update/molecdyn/hmc/gauge_monomial_momentum_bc.h
 	update/molecdyn/hmc/lcm_hmc.h
 	update/molecdyn/hmc/const_lcm_hmc.h
 	update/molecdyn/hmc/global_metropolis_accrej.h
@@ -1433,6 +1434,7 @@ target_sources(chromalib PRIVATE
 	update/molecdyn/integrator/lcm_4mn5fp_recursive.cc 
 	update/molecdyn/integrator/lcm_4mn4fp_recursive.cc 
 	update/molecdyn/integrator/lcm_creutz_gocksch_4_recursive.cc 
+	update/molecdyn/hmc/gauge_monomial_momentum_bc.cc 
 	update/molecdyn/hmc/global_metropolis_accrej.cc 
 	update/molecdyn/predictor/predictor_aggregate.cc 
 	update/molecdyn/predictor/null_predictor.cc 
