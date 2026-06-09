@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<gauge_subdomain_stitch>
+  <Sidecar>
+    <file>gauge_subdomain_split.sidecar.xml</file>
+  </Sidecar>
+
+  <Child0Cfg>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>child0.scidac</cfg_file>
+  </Child0Cfg>
+
+  <Child1Cfg>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>child1.scidac</cfg_file>
+  </Child1Cfg>
+
+  <ParentOut>
+    <cfg_file>stitched_parent.scidac</cfg_file>
+    <volfmt>SINGLEFILE</volfmt>
+  </ParentOut>
+</gauge_subdomain_stitch>

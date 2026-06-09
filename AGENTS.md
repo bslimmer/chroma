@@ -22,19 +22,33 @@ This file is the working handoff for humans and coding agents contributing to th
 
 ## Current Workstream
 
-The current feature work is centered on a new force-suppression gauge boundary condition:
+The current feature work has two closely related threads:
 
-- public XML/factory name: `TEMPORAL_ZONE_GAUGEBC`
-- implementation: `lib/actions/gauge/gaugebcs/temporal_zone_gaugebc.{h,cc}`
-- factory wiring: `lib/actions/gauge/gaugebcs/gaugebc_aggregate.cc` and `lib/actions/gauge/gaugebcs/gaugebcs.h`
-- focused test executable: `mainprogs/tests/t_temporal_zone_gaugebc.cc`
-- smoke input: `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`
-- spec: `specs/hier/temporal_zone_gaugebc.md`
+1. A new force-suppression gauge boundary condition:
+   - public XML/factory name: `TEMPORAL_ZONE_GAUGEBC`
+   - implementation: `lib/actions/gauge/gaugebcs/temporal_zone_gaugebc.{h,cc}`
+   - factory wiring: `lib/actions/gauge/gaugebcs/gaugebc_aggregate.cc` and `lib/actions/gauge/gaugebcs/gaugebcs.h`
+   - focused test executable: `mainprogs/tests/t_temporal_zone_gaugebc.cc`
+   - smoke input: `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`
+   - spec: `specs/hier/temporal_zone_gaugebc.md`
+   - HMC momentum-hook draft: `specs/hier/hmc_gauge_momentum_bc_autodiscovery.md`
+
+2. A gauge subdomain split/stitch workflow for separate child-lattice runs:
+   - spec: `specs/hier/gauge_subdomain_split.md`
+   - child gauge-HMC validation draft: `specs/hier/gauge_subdomain_gauge_hmc_validation.md`
+   - library implementation: `lib/util/gauge/gauge_subdomain_split.{h,cc}`
+   - user-facing tools: `mainprogs/main/gauge_subdomain_split.cc` and `mainprogs/main/gauge_subdomain_stitch.cc`
+   - focused test executable: `mainprogs/tests/t_gauge_subdomain_split.cc`
+   - example tool inputs: `tests/gauge_subdomain_split/gauge_subdomain_split.ini.xml` and `tests/gauge_subdomain_split/gauge_subdomain_stitch.ini.xml`
+   - intended workflow: split one parent config into two ordinary child configs, evolve the children in separate runs with frozen temporal boundary intervals, then stitch them back into a parent config
+   - first-version assumption: user-facing split/stitch tools write QIO outputs and persist split metadata in a sidecar XML file
+   - current validation assumption: child gauge-only HMC must freeze both force and refreshed momentum on the duplicated boundary intervals
 
 Important behavior note:
 
 - `TEMPORAL_ZONE_GAUGEBC` currently uses `GaugeBC::zero(P&)` to suppress gauge-like force/update fields on the selected time intervals only.
 - It does not modify the stored gauge links in `modify(Q&)`.
+- The planned modern HMC momentum masking path is to autodiscover a compatible gauge-monomial BC source from `Hamiltonian/monomial_ids` rather than introducing separate momentum-BC XML.
 
 ## Build And Test
 
@@ -62,6 +76,7 @@ Notes about the current recipe:
 Current verification targets:
 
 - `t_temporal_zone_gaugebc` should exit successfully.
+- `t_gauge_subdomain_split` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
 
 Legacy build context still matters:

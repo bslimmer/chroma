@@ -143,7 +143,8 @@ HDRS =
 bin_PROGRAMS = chroma  \
         purgaug \
         cfgtransf \
-        const_hmc hmc smd spectrum_s
+        const_hmc hmc smd spectrum_s \
+        gauge_subdomain_split gauge_subdomain_stitch
 bin_PROGRAMS += compare_gauge
 
 # Wilson specific programs
@@ -191,6 +192,8 @@ qpropgfix_SOURCES= qpropgfix.cc
 qproptrev_SOURCES= qproptrev.cc
 cfgtransf_SOURCES= cfgtransf.cc
 compare_gauge_SOURCES= compare_gauge.cc
+gauge_subdomain_split_SOURCES= gauge_subdomain_split.cc
+gauge_subdomain_stitch_SOURCES= gauge_subdomain_stitch.cc
 
 #
 # The latter rule will always try to rebuild libchroma.a when you 
