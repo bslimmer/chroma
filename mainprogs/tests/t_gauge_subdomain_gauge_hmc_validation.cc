@@ -241,8 +241,8 @@ namespace
           if (nu == t_dir)
             continue;
 
-          const int site_plus_mu = local_site(shiftedCoord(coord, mu, 1, nrow), nrow);
-          const int site_plus_nu = local_site(shiftedCoord(coord, nu, 1, nrow), nrow);
+          const int site_plus_mu = Layout::linearSiteIndex(shiftedCoord(coord, mu, 1, nrow));
+          const int site_plus_nu = Layout::linearSiteIndex(shiftedCoord(coord, nu, 1, nrow));
 
           const ColorMatrix plaq =
             links[linkIndex(mu, site, vol)] *

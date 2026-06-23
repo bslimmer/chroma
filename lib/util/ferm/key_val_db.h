@@ -33,22 +33,22 @@ namespace Chroma
     const K& key() const {return key_;}
 
     // Part of Serializable
-    unsigned short serialID (void) const {return 456;}
+    const unsigned short serialID (void) const override {return 456;}
 
-    void writeObject (std::string& output) const {
+    void writeObject (std::string& output) const override {
       BinaryBufferWriter bin;
       write(bin, key());
       output = bin.strPrimaryNode();
     }
 
-    void readObject (const std::string& input) {
+    void readObject (const std::string& input) override {
       BinaryBufferReader bin(input);
       read(bin, key());
     }
 
     // Part of DBKey
-    int hasHashFunc (void) const {return 0;}
-    int hasCompareFunc (void) const {return 0;}
+    int hasHashFunc (void) const override {return 0;}
+    int hasCompareFunc (void) const override {return 0;}
 
     /**
      * Empty hash and compare functions. We are using default functions.
@@ -81,22 +81,22 @@ namespace Chroma
     const K& key() const {return key_;}
 
     // Part of Serializable
-    unsigned short serialID (void) const {return 456;}
+    const unsigned short serialID (void) const override {return 456;}
 
-    void writeObject (std::string& output) const {
+    void writeObject (std::string& output) const override {
       LocalBinaryBufferWriter bin;
       write(bin, key());
       output = bin.strPrimaryNode();
     }
 
-    void readObject (const std::string& input) {
+    void readObject (const std::string& input) override {
       BinaryBufferReader bin(input);
       read(bin, key());
     }
 
     // Part of DBKey
-    int hasHashFunc (void) const {return 0;}
-    int hasCompareFunc (void) const {return 0;}
+    int hasHashFunc (void) const override {return 0;}
+    int hasCompareFunc (void) const override {return 0;}
 
     /**
      * Empty hash and compare functions. We are using default functions.
@@ -128,15 +128,15 @@ namespace Chroma
     const D& data() const {return data_;}
 
     // Part of Serializable
-    unsigned short serialID (void) const {return 123;}
+    const unsigned short serialID (void) const override {return 123;}
 
-    void writeObject (std::string& output) const {
+    void writeObject (std::string& output) const override {
       BinaryBufferWriter bin;
       write(bin, data());
       output = bin.strPrimaryNode();
     }
 
-    void readObject (const std::string& input) {
+    void readObject (const std::string& input) override {
       BinaryBufferReader bin(input);
       read(bin, data());
     }
@@ -165,15 +165,15 @@ namespace Chroma
     const D& data() const {return data_;}
 
     // Part of Serializable
-    unsigned short serialID (void) const {return 123;}
+    const unsigned short serialID (void) const override {return 123;}
 
-    void writeObject (std::string& output) const {
+    void writeObject (std::string& output) const override {
       LocalBinaryBufferWriter bin;
       write(bin, data());
       output = bin.strPrimaryNode();
     }
 
-    void readObject (const std::string& input) {
+    void readObject (const std::string& input) override {
       BinaryBufferReader bin(input);
       read(bin, data());
     }

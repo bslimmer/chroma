@@ -39,12 +39,14 @@ The current feature work has two closely related threads:
 2. A gauge subdomain split/stitch workflow for separate child-lattice runs:
    - spec: `specs/hier/gauge_subdomain_split.md`
    - child gauge-HMC validation draft: `specs/hier/gauge_subdomain_gauge_hmc_validation.md`
+   - child topology validation draft: `specs/hier/gauge_subdomain_topology_validation.md`
    - library implementation: `lib/util/gauge/gauge_subdomain_split.{h,cc}`
    - user-facing tools: `mainprogs/main/gauge_subdomain_split.cc` and `mainprogs/main/gauge_subdomain_stitch.cc`
    - focused test executable: `mainprogs/tests/t_gauge_subdomain_split.cc`
    - example tool inputs: `tests/gauge_subdomain_split/gauge_subdomain_split.ini.xml` and `tests/gauge_subdomain_split/gauge_subdomain_stitch.ini.xml`
    - standalone child-sized HMC smoke input: `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`
    - child gauge-HMC validation bundle: `tests/gauge_subdomain_split/gauge_subdomain_split.gauge_hmc_validation.ini.xml`, `tests/gauge_subdomain_split/hmc_child{0,1}.temporal_zone.ini.xml`, `tests/gauge_subdomain_split/measure_child{0,1}_plaq_density.ini.xml`, and `tests/gauge_subdomain_split/gauge_subdomain_gauge_hmc_validation.check.ini.xml`
+   - child topology validation bundle: `tests/gauge_subdomain_split/hmc_parent.topology_warmup.ini.xml`, `tests/gauge_subdomain_split/gauge_subdomain_split.topology_validation.ini.xml`, and `tests/gauge_subdomain_split/hmc_child{0,1}.temporal_zone_qactden.ini.xml`
    - focused validation checker: `mainprogs/tests/t_gauge_subdomain_gauge_hmc_validation.cc`
    - intended workflow: split one parent config into two ordinary child configs, evolve the children in separate runs with frozen temporal boundary intervals, then stitch them back into a parent config
    - first-version assumption: user-facing split/stitch tools write QIO outputs and persist split metadata in a sidecar XML file
@@ -76,7 +78,9 @@ Notes about the current recipe:
 
 - The source path contains spaces, so the bootstrap script builds through a no-space alias at `/private/tmp/chroma-ws`.
 - The tested QDPXX branch for this checkout is `origin/eloy/localbinarydb`.
+- If that ref already exists locally and network fetches are unavailable, set `QDPXX_SKIP_FETCH=1`; the bootstrap script will reuse the local ref, repopulate QDPXX `other_libs/` from the local source checkout when needed, and reuse an already-populated `other_libs/qdp-lapack` tree without mutating `.git/modules`.
 - The helper script may patch the temporary QDPXX worktree for Apple clang compatibility by adding `<array>` to `include/qdp_map_obj_disk.h`.
+- The current Chroma tree also includes the `Serializable::serialID()` return-type compatibility fix in `lib/util/ferm/key_val_db.h` required by the tested QDPXX/filedb combination.
 - Detailed manual commands and expected outputs are documented in `docs/build_local_qdpxx.md`.
 
 Current verification targets:
@@ -99,6 +103,7 @@ Legacy build context still matters:
 - When adding or removing test executables, update both `mainprogs/tests/Makefile.am` and `mainprogs/tests/CMakeLists.txt`.
 - Factory-registered features should be wired into the relevant aggregate registration point and umbrella include header, not only added as standalone files.
 - XML-facing features should usually ship with both a focused executable test and a smoke or regression XML input under `tests/`.
+- For new XML-driven local test workflows, create a checkout-local `cfgs/` subdirectory before running and route generated configs, restart XML, split sidecars, command-line `-o` XML outputs, and similar run artifacts there instead of the repository root so those outputs stay easy to ignore.
 - If the intended behavior is still being reasoned through, capture it in `specs/hier/*.md` rather than leaving it only in chat history.
 - Prefer changing real source under `lib/`, `mainprogs/`, `tests/`, `docs/`, and `specs/`. Avoid editing `build/deps/src/qdpxx` unless you are intentionally changing the local dependency workflow.
 
@@ -106,6 +111,8 @@ Legacy build context still matters:
 
 - Check `git status` before staging. This checkout can accumulate local artifacts that are not fully ignored.
 - Common local-only artifacts seen during current work include `build/`, `XMLDAT`, `.DS_Store`, and `.vscode/`.
+- New local XML-driven tests should prefer a checkout-local `cfgs/` directory for generated configs, restart files, and command-line XML outputs rather than writing them into the repository root. Create that directory before launching runs that expect it.
+- Additional local smoke artifacts now seen in the repo root include `child_temporal_zone_smoke_cfg_*.lime` and `child_temporal_zone_smoke_restart_*.xml` when running the child HMC smoke input from the checkout root.
 - Keep generated outputs and temporary workspace files out of commits unless the change is explicitly about the bootstrap or test workflow itself.
 
 ## How To Update This File
