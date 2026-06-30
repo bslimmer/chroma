@@ -40,6 +40,15 @@ The current feature work has two closely related threads:
    - spec: `specs/hier/gauge_subdomain_split.md`
    - child gauge-HMC validation draft: `specs/hier/gauge_subdomain_gauge_hmc_validation.md`
    - child topology validation draft: `specs/hier/gauge_subdomain_topology_validation.md`
+   - `0-+` correlator draft: `specs/hier/glueball_0mp_correlator.md`
+     - first-version plan reuses inline `QACTDEN` plus offline reduction, with
+       no new inline glue measurement required
+   - two-level `0-+` workflow draft:
+     `specs/hier/gauge_subdomain_two_level_0mp_workflow.md`
+     - first target is a level-0 parent-boundary ensemble plus level-1 child
+       conditional averages, before any production implementation or tuning
+   - periodic `QACTDEN` correlator checker: `mainprogs/tests/t_qactden_0mp_corr.cc`
+   - first periodic XML bundle: `tests/glueball_0mp/hmc_full_lattice.qactden_0mp.ini.xml`, `tests/glueball_0mp/qactden_0mp_corr.full_lattice.check.ini.xml`, and `tests/glueball_0mp/measure_unit_qactden_0mp.ini.xml`
    - library implementation: `lib/util/gauge/gauge_subdomain_split.{h,cc}`
    - user-facing tools: `mainprogs/main/gauge_subdomain_split.cc` and `mainprogs/main/gauge_subdomain_stitch.cc`
    - focused test executable: `mainprogs/tests/t_gauge_subdomain_split.cc`
@@ -88,6 +97,7 @@ Current verification targets:
 - `t_temporal_zone_gaugebc` should exit successfully.
 - `t_gauge_subdomain_split` should exit successfully.
 - `t_gauge_subdomain_gauge_hmc_validation` should complete successfully after running the split plus paired child-HMC validation workflow.
+- `t_qactden_0mp_corr` should build successfully and validate the periodic `QACTDEN` timeslice reduction using `tests/glueball_0mp/qactden_0mp_corr.full_lattice.check.ini.xml` once the corresponding HMC XML has been produced.
 - `t_hmc_momentum_bc_autodiscovery` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
 - `hmc` should complete a one-update child-sized gauge-only smoke run using `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`.
@@ -112,6 +122,9 @@ Legacy build context still matters:
 - Check `git status` before staging. This checkout can accumulate local artifacts that are not fully ignored.
 - Common local-only artifacts seen during current work include `build/`, `XMLDAT`, `.DS_Store`, and `.vscode/`.
 - New local XML-driven tests should prefer a checkout-local `cfgs/` directory for generated configs, restart files, and command-line XML outputs rather than writing them into the repository root. Create that directory before launching runs that expect it.
+- For the two-level `0-+` workflow, prefer nested output directories such as
+  `cfgs/two_level_0mp/outer_*/` so parent saves, split sidecars, child HMC
+  logs, and reducer summaries stay grouped by level-0 sample.
 - Additional local smoke artifacts now seen in the repo root include `child_temporal_zone_smoke_cfg_*.lime` and `child_temporal_zone_smoke_restart_*.xml` when running the child HMC smoke input from the checkout root.
 - Keep generated outputs and temporary workspace files out of commits unless the change is explicitly about the bootstrap or test workflow itself.
 

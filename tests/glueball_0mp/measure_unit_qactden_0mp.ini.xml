@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<chroma>
+  <annotation>
+    First-pass unit-field smoke for QACTDEN-based 0-+ reduction.
+  </annotation>
+
+  <Param>
+    <InlineMeasurements>
+      <elem>
+        <Name>QACTDEN</Name>
+        <Frequency>1</Frequency>
+        <Param>
+          <version>1</version>
+        </Param>
+        <NamedObject>
+          <gauge_id>default_gauge_field</gauge_id>
+        </NamedObject>
+      </elem>
+    </InlineMeasurements>
+
+    <nrow>4 4 4 8</nrow>
+  </Param>
+
+  <Cfg>
+    <cfg_type>UNIT</cfg_type>
+    <cfg_file>DUMMY</cfg_file>
+  </Cfg>
+</chroma>
