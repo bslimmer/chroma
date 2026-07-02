@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<qactden_0mp_corr_check>
+  <Input>
+    <file>cfgs/two_level_0mp/parent_outer.hmc.xml</file>
+  </Input>
+
+  <Output>
+    <summary_file>cfgs/two_level_0mp/outer_100/parent_window.summary.xml</summary_file>
+    <csv_file>cfgs/two_level_0mp/outer_100/parent_window.csv</csv_file>
+  </Output>
+
+  <Geometry>
+    <nrow>4 4 4 12</nrow>
+    <decay_dir>3</decay_dir>
+  </Geometry>
+
+  <Reducer>
+    <mode>PARENT_WINDOW</mode>
+    <support_guard>1</support_guard>
+    <sidecar_file>cfgs/two_level_0mp/outer_100/split.sidecar.xml</sidecar_file>
+    <outer_sample_id>outer_100</outer_sample_id>
+    <retained_update_no>100</retained_update_no>
+  </Reducer>
+
+  <Checks>
+    <expected_pairs>
+      <elem>
+        <delta_t_parent>4</delta_t_parent>
+        <value>1</value>
+      </elem>
+      <elem>
+        <delta_t_parent>5</delta_t_parent>
+        <value>2</value>
+      </elem>
+      <elem>
+        <delta_t_parent>6</delta_t_parent>
+        <value>3</value>
+      </elem>
+      <elem>
+        <delta_t_parent>7</delta_t_parent>
+        <value>2</value>
+      </elem>
+      <elem>
+        <delta_t_parent>8</delta_t_parent>
+        <value>1</value>
+      </elem>
+    </expected_pairs>
+  </Checks>
+</qactden_0mp_corr_check>

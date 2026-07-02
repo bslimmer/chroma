@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<qactden_0mp_corr_check>
+  <Output>
+    <summary_file>cfgs/two_level_0mp/outer_100/two_level.summary.xml</summary_file>
+    <csv_file>cfgs/two_level_0mp/outer_100/two_level.csv</csv_file>
+  </Output>
+
+  <Reducer>
+    <mode>TWO_LEVEL_CROSS_DOMAIN</mode>
+    <compare_delta_t_parent_set>5 6 7</compare_delta_t_parent_set>
+  </Reducer>
+
+  <OuterSample>
+    <id>outer_100</id>
+    <sidecar_file>cfgs/two_level_0mp/outer_100/split.sidecar.xml</sidecar_file>
+  </OuterSample>
+
+  <Child0>
+    <summary_file>cfgs/two_level_0mp/outer_100/child0.summary.xml</summary_file>
+  </Child0>
+
+  <Child1>
+    <summary_file>cfgs/two_level_0mp/outer_100/child1.summary.xml</summary_file>
+  </Child1>
+
+  <Parent>
+    <summary_file>cfgs/two_level_0mp/outer_100/parent_window.summary.xml</summary_file>
+  </Parent>
+
+  <Checks>
+    <expected_pairs>
+      <elem>
+        <delta_t_parent>5</delta_t_parent>
+        <value>2</value>
+      </elem>
+      <elem>
+        <delta_t_parent>6</delta_t_parent>
+        <value>3</value>
+      </elem>
+      <elem>
+        <delta_t_parent>7</delta_t_parent>
+        <value>2</value>
+      </elem>
+    </expected_pairs>
+  </Checks>
+</qactden_0mp_corr_check>

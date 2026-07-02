@@ -43,12 +43,15 @@ The current feature work has two closely related threads:
    - `0-+` correlator draft: `specs/hier/glueball_0mp_correlator.md`
      - first-version plan reuses inline `QACTDEN` plus offline reduction, with
        no new inline glue measurement required
-   - two-level `0-+` workflow draft:
+   - two-level `0-+` workflow spec:
      `specs/hier/gauge_subdomain_two_level_0mp_workflow.md`
      - first target is a level-0 parent-boundary ensemble plus level-1 child
        conditional averages, before any production implementation or tuning
    - periodic `QACTDEN` correlator checker: `mainprogs/tests/t_qactden_0mp_corr.cc`
    - first periodic XML bundle: `tests/glueball_0mp/hmc_full_lattice.qactden_0mp.ini.xml`, `tests/glueball_0mp/qactden_0mp_corr.full_lattice.check.ini.xml`, and `tests/glueball_0mp/measure_unit_qactden_0mp.ini.xml`
+   - first two-level XML bundle: `tests/gauge_subdomain_split/hmc_parent.0mp_two_level_outer.ini.xml`, `tests/gauge_subdomain_split/gauge_subdomain_split.0mp_two_level.outer_{100,200}.ini.xml`, `tests/gauge_subdomain_split/hmc_child{0,1}.temporal_zone_qactden_0mp_2lvl.outer_{100,200}.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_parent_window.outer_{100,200}.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_child{0,1}.outer_{100,200}.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_outer_sample.outer_{100,200}.check.ini.xml`, and `tests/gauge_subdomain_split/qactden_0mp_two_level.check.ini.xml`
+   - higher-statistics two-level template bundle: `tests/gauge_subdomain_split/hmc_parent.0mp_two_level_outer.template.ini.xml`, `tests/gauge_subdomain_split/gauge_subdomain_split.0mp_two_level.template.ini.xml`, `tests/gauge_subdomain_split/hmc_child.temporal_zone_qactden_0mp_2lvl.template.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_parent_window.template.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_child.template.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_outer_sample.template.check.ini.xml`, and generator `tests/gauge_subdomain_split/generate_two_level_0mp_xml_bundle.sh`
+     - first higher-statistics preset targets the former one-hour plan with `12` outer samples and `32` retained child measurements per child stream
    - library implementation: `lib/util/gauge/gauge_subdomain_split.{h,cc}`
    - user-facing tools: `mainprogs/main/gauge_subdomain_split.cc` and `mainprogs/main/gauge_subdomain_stitch.cc`
    - focused test executable: `mainprogs/tests/t_gauge_subdomain_split.cc`
@@ -83,6 +86,12 @@ Useful modes:
 ./scripts/bootstrap_local_qdpxx_build.sh run-tests
 ```
 
+Higher-statistics two-level XML generation:
+
+```bash
+./tests/gauge_subdomain_split/generate_two_level_0mp_xml_bundle.sh
+```
+
 Notes about the current recipe:
 
 - The source path contains spaces, so the bootstrap script builds through a no-space alias at `/private/tmp/chroma-ws`.
@@ -98,6 +107,7 @@ Current verification targets:
 - `t_gauge_subdomain_split` should exit successfully.
 - `t_gauge_subdomain_gauge_hmc_validation` should complete successfully after running the split plus paired child-HMC validation workflow.
 - `t_qactden_0mp_corr` should build successfully and validate the periodic `QACTDEN` timeslice reduction using `tests/glueball_0mp/qactden_0mp_corr.full_lattice.check.ini.xml` once the corresponding HMC XML has been produced.
+- `t_qactden_0mp_corr` should also support the two-level parent-window, child-summary, cross-domain, and outer-ensemble reducer modes using the `tests/gauge_subdomain_split/qactden_0mp_*.check.ini.xml` bundle once the corresponding parent and child HMC XML logs have been produced under `cfgs/two_level_0mp/` or from a generated template bundle such as `cfgs/two_level_0mp_1h/`.
 - `t_hmc_momentum_bc_autodiscovery` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
 - `hmc` should complete a one-update child-sized gauge-only smoke run using `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`.
@@ -123,8 +133,9 @@ Legacy build context still matters:
 - Common local-only artifacts seen during current work include `build/`, `XMLDAT`, `.DS_Store`, and `.vscode/`.
 - New local XML-driven tests should prefer a checkout-local `cfgs/` directory for generated configs, restart files, and command-line XML outputs rather than writing them into the repository root. Create that directory before launching runs that expect it.
 - For the two-level `0-+` workflow, prefer nested output directories such as
-  `cfgs/two_level_0mp/outer_*/` so parent saves, split sidecars, child HMC
-  logs, and reducer summaries stay grouped by level-0 sample.
+  `cfgs/two_level_0mp/outer_*/` or `cfgs/two_level_0mp_1h/outer_*/` so parent
+  saves, split sidecars, child HMC logs, reducer summaries, and any generated
+  workflow XML stay grouped by level-0 sample or run preset.
 - Additional local smoke artifacts now seen in the repo root include `child_temporal_zone_smoke_cfg_*.lime` and `child_temporal_zone_smoke_restart_*.xml` when running the child HMC smoke input from the checkout root.
 - Keep generated outputs and temporary workspace files out of commits unless the change is explicitly about the bootstrap or test workflow itself.
 

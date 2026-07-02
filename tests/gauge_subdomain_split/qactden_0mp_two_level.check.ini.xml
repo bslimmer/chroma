@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<qactden_0mp_corr_check>
+  <Input>
+    <outer_sample_summaries>
+      <elem>cfgs/two_level_0mp/outer_100/two_level.summary.xml</elem>
+      <elem>cfgs/two_level_0mp/outer_200/two_level.summary.xml</elem>
+    </outer_sample_summaries>
+  </Input>
+
+  <Output>
+    <summary_file>cfgs/two_level_0mp/two_level.outer_ensemble.summary.xml</summary_file>
+    <csv_file>cfgs/two_level_0mp/two_level.outer_ensemble.csv</csv_file>
+  </Output>
+
+  <Reducer>
+    <mode>TWO_LEVEL_OUTER_ENSEMBLE</mode>
+    <compare_delta_t_parent_set>5 6 7</compare_delta_t_parent_set>
+  </Reducer>
+
+  <Checks>
+    <min_outer_samples>2</min_outer_samples>
+  </Checks>
+</qactden_0mp_corr_check>

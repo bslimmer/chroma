@@ -1,0 +1,90 @@
+<?xml version="1.0"?>
+<Params>
+  <MCControl>
+    <Cfg>
+      <cfg_type>SCIDAC</cfg_type>
+      <cfg_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/child@CHILD_ID@.start.scidac</cfg_file>
+    </Cfg>
+
+    <RNG>
+      <Seed>
+        <elem>@CHILD_SEED@</elem>
+        <elem>0</elem>
+        <elem>0</elem>
+        <elem>0</elem>
+      </Seed>
+    </RNG>
+
+    <StartUpdateNum>0</StartUpdateNum>
+    <NWarmUpUpdates>0</NWarmUpUpdates>
+    <NProductionUpdates>@CHILD_UPDATES@</NProductionUpdates>
+    <NUpdatesThisRun>@CHILD_UPDATES@</NUpdatesThisRun>
+    <SaveInterval>@CHILD_UPDATES@</SaveInterval>
+    <SavePrefix>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/child@CHILD_ID@</SavePrefix>
+    <SaveVolfmt>SINGLEFILE</SaveVolfmt>
+    <ReproCheckP>false</ReproCheckP>
+    <ReverseCheckP>false</ReverseCheckP>
+    <MonitorForces>true</MonitorForces>
+
+    <InlineMeasurements>
+      <elem>
+        <Name>QACTDEN</Name>
+        <Frequency>@CHILD_QACTDEN_FREQUENCY@</Frequency>
+        <Param>
+          <version>1</version>
+        </Param>
+        <NamedObject>
+          <gauge_id>default_gauge_field</gauge_id>
+        </NamedObject>
+      </elem>
+    </InlineMeasurements>
+  </MCControl>
+
+  <HMCTrj>
+    <Monomials>
+      <elem>
+        <Name>GAUGE_MONOMIAL</Name>
+        <GaugeAction>
+          <Name>WILSON_GAUGEACT</Name>
+          <beta>5.7</beta>
+          <GaugeBC>
+            <Name>TEMPORAL_ZONE_GAUGEBC</Name>
+            <t_dir>3</t_dir>
+            <zero_intervals>
+              <elem>
+                <t_start>0</t_start>
+                <t_end>0</t_end>
+              </elem>
+              <elem>
+                <t_start>6</t_start>
+                <t_end>6</t_end>
+              </elem>
+            </zero_intervals>
+          </GaugeBC>
+        </GaugeAction>
+        <NamedObject>
+          <monomial_id>gauge</monomial_id>
+        </NamedObject>
+      </elem>
+    </Monomials>
+
+    <Hamiltonian>
+      <monomial_ids>
+        <elem>gauge</elem>
+      </monomial_ids>
+    </Hamiltonian>
+
+    <MDIntegrator>
+      <tau0>0.1</tau0>
+      <Integrator>
+        <Name>LCM_STS_LEAPFROG</Name>
+        <n_steps>4</n_steps>
+        <monomial_ids>
+          <elem>gauge</elem>
+        </monomial_ids>
+      </Integrator>
+    </MDIntegrator>
+
+    <nrow>4 4 4 7</nrow>
+  </HMCTrj>
+</Params>

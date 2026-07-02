@@ -620,25 +620,31 @@ pass/fail criterion.
 The first implementation will likely need a small XML bundle under
 `tests/gauge_subdomain_split/`.
 
-Suggested artifacts:
+Suggested checked-in artifacts:
 
-- `hmc_parent.0mp_two_level_outer.ini.xml`
-  - whole-lattice parent HMC producing level-0 samples
+- `hmc_parent.0mp_two_level_outer.template.ini.xml`
+  - whole-lattice parent HMC template for level-0 samples
   - includes inline `QACTDEN` at the retained outer-sample cadence
-- `gauge_subdomain_split.0mp_two_level.ini.xml`
-  - split input for one saved parent sample
-- `hmc_child0.temporal_zone_qactden_0mp_2lvl.ini.xml`
-  - level-1 child0 HMC template
-- `hmc_child1.temporal_zone_qactden_0mp_2lvl.ini.xml`
-  - level-1 child1 HMC template
-- `qactden_0mp_two_level.check.ini.xml`
-  - reducer/checker input for the nested estimator
-- `qactden_0mp_parent_window.check.ini.xml`
-  - reducer/checker input for the direct parent-window comparator
+- `gauge_subdomain_split.0mp_two_level.template.ini.xml`
+  - split input template for one saved parent sample
+- `hmc_child.temporal_zone_qactden_0mp_2lvl.template.ini.xml`
+  - level-1 child HMC template parameterized by `child_id`
+- `qactden_0mp_parent_window.template.check.ini.xml`
+  - reducer/checker template for the direct parent-window comparator
+- `qactden_0mp_child.template.check.ini.xml`
+  - reducer/checker template for one child summary
+- `qactden_0mp_outer_sample.template.check.ini.xml`
+  - reducer/checker template for one factorized outer sample
+- one small generator script
+  - expands those templates into concrete run XML for a chosen outer-sample set
+  - writes the concrete XML under a checkout-local `cfgs/.../xml/` directory
+  - also writes the outer-ensemble reducer input with the explicit list of
+    generated outer-sample summaries
 
-Generated outputs should live under a dedicated checkout-local hierarchy, for
-example:
+Generated run inputs and outputs should live under a dedicated checkout-local
+hierarchy, for example:
 
+- `cfgs/two_level_0mp/xml/...`
 - `cfgs/two_level_0mp/outer_100/...`
 - `cfgs/two_level_0mp/outer_200/...`
 

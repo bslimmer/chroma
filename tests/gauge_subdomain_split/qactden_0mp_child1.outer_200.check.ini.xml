@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<qactden_0mp_corr_check>
+  <Input>
+    <file>cfgs/two_level_0mp/outer_200/child1.hmc.xml</file>
+  </Input>
+
+  <Output>
+    <summary_file>cfgs/two_level_0mp/outer_200/child1.summary.xml</summary_file>
+    <csv_file>cfgs/two_level_0mp/outer_200/child1.local.csv</csv_file>
+  </Output>
+
+  <Geometry>
+    <nrow>4 4 4 7</nrow>
+    <decay_dir>3</decay_dir>
+  </Geometry>
+
+  <Reducer>
+    <mode>INTERIOR_NOWRAP_CHILD</mode>
+    <support_guard>1</support_guard>
+    <max_dt>2</max_dt>
+    <sidecar_file>cfgs/two_level_0mp/outer_200/split.sidecar.xml</sidecar_file>
+    <child_id>1</child_id>
+    <discard_updates>20</discard_updates>
+    <outer_sample_id>outer_200</outer_sample_id>
+  </Reducer>
+
+  <Checks>
+    <expected_measurements>16</expected_measurements>
+    <expected_timeslices>7</expected_timeslices>
+    <expected_safe_slices>2 3 4</expected_safe_slices>
+    <expected_num_sources>
+      <elem>
+        <delta_t_child>0</delta_t_child>
+        <value>3</value>
+      </elem>
+      <elem>
+        <delta_t_child>1</delta_t_child>
+        <value>2</value>
+      </elem>
+      <elem>
+        <delta_t_child>2</delta_t_child>
+        <value>1</value>
+      </elem>
+    </expected_num_sources>
+  </Checks>
+</qactden_0mp_corr_check>
