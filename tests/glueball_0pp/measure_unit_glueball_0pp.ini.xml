@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<glueball_0pp_corr_check>
+  <Output>
+    <summary_file>cfgs/glueball_0pp/unit.measurement.summary.xml</summary_file>
+    <csv_file>cfgs/glueball_0pp/unit.measurement.csv</csv_file>
+  </Output>
+
+  <Geometry>
+    <nrow>4 4 4 8</nrow>
+    <decay_dir>3</decay_dir>
+  </Geometry>
+
+  <Reducer>
+    <mode>MEASURE_CONFIG</mode>
+  </Reducer>
+
+  <Measurement>
+    <child_id>-1</child_id>
+    <stream_id>0</stream_id>
+    <update_no>0</update_no>
+    <bl_level_selected>1</bl_level_selected>
+    <BlkAccu>1.0e-5</BlkAccu>
+    <BlkMax>50</BlkMax>
+  </Measurement>
+
+  <Cfg>
+    <cfg_type>UNIT</cfg_type>
+    <cfg_file>DUMMY</cfg_file>
+  </Cfg>
+</glueball_0pp_corr_check>

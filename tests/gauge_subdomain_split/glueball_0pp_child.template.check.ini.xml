@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<glueball_0pp_corr_check>
+  <Input>
+    <measurement_files>
+@MEASUREMENT_FILES@
+    </measurement_files>
+  </Input>
+
+  <Output>
+    <summary_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/glueball_0pp.child@CHILD_ID@.summary.xml</summary_file>
+    <csv_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/glueball_0pp.child@CHILD_ID@.local.csv</csv_file>
+  </Output>
+
+  <Geometry>
+    <nrow>8 8 8 5</nrow>
+    <decay_dir>3</decay_dir>
+  </Geometry>
+
+  <Reducer>
+    <mode>INTERIOR_NOWRAP_CHILD</mode>
+    <support_guard>0</support_guard>
+    <max_dt>2</max_dt>
+    <sidecar_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/split.sidecar.xml</sidecar_file>
+    <child_id>@CHILD_ID@</child_id>
+    <discard_updates>@DISCARD_UPDATES@</discard_updates>
+    <outer_sample_id>@OUTER_SAMPLE_ID@</outer_sample_id>
+    <bl_level_selected>@BL_LEVEL_SELECTED@</bl_level_selected>
+  </Reducer>
+
+  <Checks>
+    <expected_measurements>@EXPECTED_MEASUREMENTS@</expected_measurements>
+    <expected_timeslices>5</expected_timeslices>
+    <expected_safe_slices>1 2 3</expected_safe_slices>
+    <expected_num_sources>
+      <elem>
+        <delta_t_child>0</delta_t_child>
+        <value>3</value>
+      </elem>
+      <elem>
+        <delta_t_child>1</delta_t_child>
+        <value>2</value>
+      </elem>
+      <elem>
+        <delta_t_child>2</delta_t_child>
+        <value>1</value>
+      </elem>
+    </expected_num_sources>
+  </Checks>
+</glueball_0pp_corr_check>

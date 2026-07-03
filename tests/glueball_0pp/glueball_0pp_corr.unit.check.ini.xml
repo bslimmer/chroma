@@ -1,0 +1,49 @@
+<?xml version="1.0"?>
+<glueball_0pp_corr_check>
+  <Input>
+    <measurement_file>cfgs/glueball_0pp/unit.measurement.summary.xml</measurement_file>
+  </Input>
+
+  <Output>
+    <summary_file>cfgs/glueball_0pp/unit.periodic.summary.xml</summary_file>
+    <csv_file>cfgs/glueball_0pp/unit.periodic.csv</csv_file>
+  </Output>
+
+  <Geometry>
+    <nrow>4 4 4 8</nrow>
+    <decay_dir>3</decay_dir>
+  </Geometry>
+
+  <Reducer>
+    <mode>PERIODIC_ALL_T</mode>
+    <max_dt>4</max_dt>
+    <bl_level_selected>1</bl_level_selected>
+  </Reducer>
+
+  <Checks>
+    <expected_measurements>1</expected_measurements>
+    <expected_timeslices>8</expected_timeslices>
+    <expected_num_sources>
+      <elem>
+        <dt>0</dt>
+        <value>8</value>
+      </elem>
+      <elem>
+        <dt>1</dt>
+        <value>8</value>
+      </elem>
+      <elem>
+        <dt>2</dt>
+        <value>8</value>
+      </elem>
+      <elem>
+        <dt>3</dt>
+        <value>8</value>
+      </elem>
+      <elem>
+        <dt>4</dt>
+        <value>8</value>
+      </elem>
+    </expected_num_sources>
+  </Checks>
+</glueball_0pp_corr_check>

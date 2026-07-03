@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<gauge_subdomain_split>
+  <Parent>
+    <nrow>8 8 8 8</nrow>
+    <Cfg>
+      <cfg_type>SCIDAC</cfg_type>
+      <cfg_file>@OUTPUT_ROOT@/parent_outer_cfg_@OUTER_UPDATE@.lime</cfg_file>
+    </Cfg>
+  </Parent>
+
+  <Param>
+    <t_dir>3</t_dir>
+    <cut0>0</cut0>
+    <cut1>4</cut1>
+    <frozen_width>1</frozen_width>
+  </Param>
+
+  <Child0>
+    <cfg_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/child0.start.scidac</cfg_file>
+    <volfmt>SINGLEFILE</volfmt>
+  </Child0>
+
+  <Child1>
+    <cfg_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/child1.start.scidac</cfg_file>
+    <volfmt>SINGLEFILE</volfmt>
+  </Child1>
+
+  <Sidecar>
+    <file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/split.sidecar.xml</file>
+  </Sidecar>
+</gauge_subdomain_split>

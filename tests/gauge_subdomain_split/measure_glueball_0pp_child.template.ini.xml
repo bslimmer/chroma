@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<glueball_0pp_corr_check>
+  <Output>
+    <summary_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/glueball_0pp.child@CHILD_ID@.stream@STREAM_ID@.meas_@MEAS_UPDATE@.summary.xml</summary_file>
+    <csv_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/glueball_0pp.child@CHILD_ID@.stream@STREAM_ID@.meas_@MEAS_UPDATE@.csv</csv_file>
+  </Output>
+
+  <Geometry>
+    <nrow>8 8 8 5</nrow>
+    <decay_dir>3</decay_dir>
+  </Geometry>
+
+  <Reducer>
+    <mode>MEASURE_CONFIG</mode>
+  </Reducer>
+
+  <Measurement>
+    <outer_sample_id>@OUTER_SAMPLE_ID@</outer_sample_id>
+    <child_id>@CHILD_ID@</child_id>
+    <stream_id>@STREAM_ID@</stream_id>
+    <update_no>@MEAS_UPDATE@</update_no>
+    <bl_level_selected>@BL_LEVEL_SELECTED@</bl_level_selected>
+    <BlkAccu>1.0e-5</BlkAccu>
+    <BlkMax>50</BlkMax>
+  </Measurement>
+
+  <Cfg>
+    <cfg_type>SCIDAC</cfg_type>
+    <cfg_file>@OUTPUT_ROOT@/@OUTER_SAMPLE_ID@/child@CHILD_ID@_cfg_@MEAS_UPDATE@.lime</cfg_file>
+  </Cfg>
+</glueball_0pp_corr_check>

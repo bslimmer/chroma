@@ -47,6 +47,49 @@ The current feature work has two closely related threads:
      `specs/hier/gauge_subdomain_two_level_0mp_workflow.md`
      - first target is a level-0 parent-boundary ensemble plus level-1 child
        conditional averages, before any production implementation or tuning
+   - two-level `0++` workflow draft:
+     `specs/hier/gauge_subdomain_two_level_0pp_workflow.md`
+     - first-version plan reuses the existing scalar glueball / spatial
+       Wilson-loop operator path with `support_guard = 0`
+     - first selected operator is the existing-infrastructure `2 x 2` square
+       blocked plaquette (`bl_level_selected = 1`)
+     - first implementation assumes a thin post-HMC measurement pass on saved
+       parent and child configs rather than a new inline HMC emitter
+     - first concrete target is an even split `8^4` geometry with a nominal
+       `40` retained parent samples and `10` retained post-discard,
+       post-thinning child measurements per child domain per retained parent
+       sample
+   - periodic / two-level `0++` correlator checker:
+     `mainprogs/tests/t_glueball_0pp_corr.cc`
+     - measures blocked spatial `0++` operators from saved configs via the
+       existing `gluecor` path and then reduces them offline across the
+       periodic, parent-window, child-summary, cross-domain, and
+       outer-ensemble stages
+     - the tracked `8^4` workflow now compares all available cross-domain
+       separations for `support_guard = 0`, namely `delta_t_parent = 2..6`
+     - `TWO_LEVEL_OUTER_ENSEMBLE` also accepts
+       `Reducer/require_pass = false` for low-stat thin validation passes where
+       writing the summary matters more than enforcing the final `3 sigma`
+       consistency gate
+   - first periodic `0++` XML bundle:
+     `tests/glueball_0pp/measure_unit_glueball_0pp.ini.xml`,
+     `tests/glueball_0pp/measure_full_lattice.glueball_0pp.template.ini.xml`,
+     `tests/glueball_0pp/glueball_0pp_corr.unit.check.ini.xml`, and
+     `tests/glueball_0pp/glueball_0pp_corr.full_lattice.check.ini.xml`
+   - first two-level `0++` template bundle:
+     `tests/gauge_subdomain_split/hmc_parent.0pp_two_level_outer.template.ini.xml`,
+     `tests/gauge_subdomain_split/gauge_subdomain_split.0pp_two_level.template.ini.xml`,
+     `tests/gauge_subdomain_split/hmc_child.temporal_zone_glueball_0pp_2lvl.template.ini.xml`,
+     `tests/gauge_subdomain_split/measure_glueball_0pp_parent.template.ini.xml`,
+     `tests/gauge_subdomain_split/measure_glueball_0pp_child.template.ini.xml`,
+     `tests/gauge_subdomain_split/glueball_0pp_parent_window.template.check.ini.xml`,
+     `tests/gauge_subdomain_split/glueball_0pp_child.template.check.ini.xml`,
+     `tests/gauge_subdomain_split/glueball_0pp_outer_sample.template.check.ini.xml`,
+     and generator
+     `tests/gauge_subdomain_split/generate_two_level_0pp_xml_bundle.sh`
+     - first higher-statistics preset targets the first `8^4` evenly split
+       production plan with `40` retained outer samples and `10` retained
+       post-thinning child measurements per child stream
    - periodic `QACTDEN` correlator checker: `mainprogs/tests/t_qactden_0mp_corr.cc`
    - first periodic XML bundle: `tests/glueball_0mp/hmc_full_lattice.qactden_0mp.ini.xml`, `tests/glueball_0mp/qactden_0mp_corr.full_lattice.check.ini.xml`, and `tests/glueball_0mp/measure_unit_qactden_0mp.ini.xml`
    - first two-level XML bundle: `tests/gauge_subdomain_split/hmc_parent.0mp_two_level_outer.ini.xml`, `tests/gauge_subdomain_split/gauge_subdomain_split.0mp_two_level.outer_{100,200}.ini.xml`, `tests/gauge_subdomain_split/hmc_child{0,1}.temporal_zone_qactden_0mp_2lvl.outer_{100,200}.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_parent_window.outer_{100,200}.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_child{0,1}.outer_{100,200}.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_outer_sample.outer_{100,200}.check.ini.xml`, and `tests/gauge_subdomain_split/qactden_0mp_two_level.check.ini.xml`
@@ -90,6 +133,7 @@ Higher-statistics two-level XML generation:
 
 ```bash
 ./tests/gauge_subdomain_split/generate_two_level_0mp_xml_bundle.sh
+./tests/gauge_subdomain_split/generate_two_level_0pp_xml_bundle.sh
 ```
 
 Notes about the current recipe:
@@ -108,6 +152,22 @@ Current verification targets:
 - `t_gauge_subdomain_gauge_hmc_validation` should complete successfully after running the split plus paired child-HMC validation workflow.
 - `t_qactden_0mp_corr` should build successfully and validate the periodic `QACTDEN` timeslice reduction using `tests/glueball_0mp/qactden_0mp_corr.full_lattice.check.ini.xml` once the corresponding HMC XML has been produced.
 - `t_qactden_0mp_corr` should also support the two-level parent-window, child-summary, cross-domain, and outer-ensemble reducer modes using the `tests/gauge_subdomain_split/qactden_0mp_*.check.ini.xml` bundle once the corresponding parent and child HMC XML logs have been produced under `cfgs/two_level_0mp/` or from a generated template bundle such as `cfgs/two_level_0mp_1h/`.
+- `t_glueball_0pp_corr` should build successfully, pass the unit-gauge
+  measurement smoke `tests/glueball_0pp/measure_unit_glueball_0pp.ini.xml`,
+  and validate the periodic blocked-plaquette reduction using
+  `tests/glueball_0pp/glueball_0pp_corr.unit.check.ini.xml`.
+- `t_glueball_0pp_corr` should also support the full-lattice periodic reducer
+  using `tests/glueball_0pp/glueball_0pp_corr.full_lattice.check.ini.xml`
+  after a saved-config measurement pass has produced the expected summary file.
+- `t_glueball_0pp_corr` should also support the two-level parent-window,
+  child-summary, cross-domain, and outer-ensemble reducer modes using the
+  `tests/gauge_subdomain_split/glueball_0pp_*.check.ini.xml` bundle once the
+  corresponding parent and child measurement summaries have been produced under
+  a generated template bundle such as `cfgs/two_level_0pp_40x10/`.
+- `t_glueball_0pp_corr` should also support a geometry-matched thin validation
+  pass against existing saved split configs, such as the local
+  `cfgs/two_level_0mp/` run, where a low-stat outer-ensemble summary may use
+  `Reducer/require_pass = false`.
 - `t_hmc_momentum_bc_autodiscovery` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
 - `hmc` should complete a one-update child-sized gauge-only smoke run using `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`.
@@ -136,6 +196,10 @@ Legacy build context still matters:
   `cfgs/two_level_0mp/outer_*/` or `cfgs/two_level_0mp_1h/outer_*/` so parent
   saves, split sidecars, child HMC logs, reducer summaries, and any generated
   workflow XML stay grouped by level-0 sample or run preset.
+- For the two-level `0++` workflow, prefer nested output directories such as
+  `cfgs/two_level_0pp_40x10/outer_*/` so parent saves, split sidecars, child
+  HMC logs, post-HMC measurement summaries, reducer summaries, and generated
+  workflow XML stay grouped by level-0 sample.
 - Additional local smoke artifacts now seen in the repo root include `child_temporal_zone_smoke_cfg_*.lime` and `child_temporal_zone_smoke_restart_*.xml` when running the child HMC smoke input from the checkout root.
 - Keep generated outputs and temporary workspace files out of commits unless the change is explicitly about the bootstrap or test workflow itself.
 
