@@ -778,6 +778,13 @@ Recommended provisional defaults for that first campaign target:
 - `bl_level_selected = 1`
 - `N1_measure_stride = 1`
 - `N1_warmup = 0`
+- parent HMC integrator: `tau0 = 0.1`, `n_steps = 15`
+- child HMC integrator: `tau0 = 0.1`, `n_steps = 6`
+
+Those first provisional `8^4` HMC settings are chosen to target about
+`80%` acceptance for the gauge-only parent and child streams on the current
+Wilson-action setup, while staying inside the existing leapfrog
+infrastructure.
 
 With those provisional defaults, this implies:
 
@@ -826,6 +833,13 @@ Suggested checked-in artifacts:
   - writes the concrete XML under a checkout-local `cfgs/.../xml/` directory
   - also writes the outer-ensemble reducer input with the explicit list of
     generated outer-sample summaries
+  - should support reusing an aligned retained-parent prefix from an existing
+    `cfgs/...` directory, with split and parent-measurement inputs pointed at
+    those already-saved parent configs
+  - if additional outer samples are requested beyond that reused prefix, the
+    generated parent HMC input may start a fresh HMC leg from the last reused
+    saved parent gauge config; a full saved-state restart is not required in
+    the first pass
 
 Generated run inputs and outputs should live under a dedicated checkout-local
 hierarchy, for example:

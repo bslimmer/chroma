@@ -26,6 +26,6 @@
 
   <Cfg>
     <cfg_type>SCIDAC</cfg_type>
-    <cfg_file>@OUTPUT_ROOT@/parent_outer_cfg_@OUTER_UPDATE@.lime</cfg_file>
+    <cfg_file>@PARENT_CFG_FILE@</cfg_file>
   </Cfg>
 </glueball_0pp_corr_check>

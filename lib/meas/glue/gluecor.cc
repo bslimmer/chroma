@@ -6,30 +6,84 @@
 #include "util/gauge/shift2.h"
 #include "meas/glue/gluecor.h"
 
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
 namespace Chroma 
 { 
+  namespace
+  {
+    std::string makeSimpleOutputFileName(const std::string& xml_group,
+                                         int bl_level,
+                                         const std::string& simple_output_file)
+    {
+      if (!simple_output_file.empty())
+        return simple_output_file;
+
+      if (xml_group.size() >= 4 &&
+          xml_group.substr(xml_group.size() - 4) == ".csv")
+      {
+        return xml_group;
+      }
+
+      std::ostringstream os;
+      if (!xml_group.empty())
+        os << xml_group;
+      else
+        os << "gluecor";
+      os << ".bl" << bl_level << ".csv";
+      return os.str();
+    }
+
+    void writeSimpleOutputCsv(const std::string& filename,
+                              const multi1d<Double>& op0)
+    {
+      if (!Layout::primaryNode())
+        return;
+
+      std::ofstream out(filename.c_str());
+      if (!out.good())
+      {
+        QDPIO::cerr << "gluecor: failed to open simple CSV output file: "
+                    << filename << std::endl;
+        QDP_abort(1);
+      }
+
+      out << "t,op0\n";
+      out << std::setprecision(17);
+      for (int t = 0; t < op0.size(); ++t)
+        out << t << "," << toDouble(op0[t]) << "\n";
+    }
+  }
 
   //! Construct 0++, 2++ and 1+- glueball correlation functions from fuzzy links
   /*! 
    * \ingroup glue
    *
    * Construct 0++, 2++ and 1+- glueball correlation functions from
-   * fuzzy links at blocking level bl_level and Write them in 
-   * XML format.
+   * fuzzy links at blocking level bl_level and write them in XML
+   * format unless simple_output is enabled.
    *
    * Warning: this works only for Nd = 4 !
    *
    * \param xml_out       xml file object ( Write )
-   * \param xml_group     std::string used for writing xml data ( Read )
+   * \param xml_group     std::string used for writing xml data, or a CSV
+   *                      basename when simple_output is true ( Read )
    * \param u             (blocked) gauge field ( Read )
    * \param bl_level      blocking level ( Read )
    * \param phases        object holds list of momenta and Fourier phases ( Read )
+   * \param simple_output if true, write op0 to CSV instead of XML ( Read )
+   * \param simple_output_file optional CSV path override for simple_output
+   *                           mode ( Read )
    */
 
   void gluecor(XMLWriter& xml_out, const std::string& xml_group,
 	       const multi1d<LatticeColorMatrix>& u, 
 	       const SftMom& phases,
-	       int bl_level)
+	       int bl_level,
+	       bool simple_output,
+	       const std::string& simple_output_file)
   {
     START_CODE();
 
@@ -194,6 +248,16 @@ namespace Chroma
       glue0[t] = glue0[t] * dummy;
       glue1[t] = glue1[t] * dummy;
       glue2[t] = glue2[t] * dummy;
+    }
+
+    if (simple_output)
+    {
+      writeSimpleOutputCsv(makeSimpleOutputFileName(xml_group,
+                                                    bl_level,
+                                                    simple_output_file),
+                           op0);
+      END_CODE();
+      return;
     }
 
     /* Finally Write glueball correlations in NAMELIST format */

@@ -35,6 +35,8 @@ scripts/test_runners/7n_mpirun_rsh_runner.sh
 scripts/test_runners/9q_mpirun_rsh_runner.sh
 scripts/test_runners/cobalt_runner.sh
 scripts/test_runners/trivial_runner.sh
+tests/two_level_glueball/parent_files
+tests/two_level_glueball/child_hmc_runs
 build/
 **/.DS_Store
 .vscode/

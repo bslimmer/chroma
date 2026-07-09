@@ -16,6 +16,7 @@ set( ChromaMain_EXECUTABLES
     smd
 	spectrum_s
     compare_gauge
+    gluecor_measure
     gauge_subdomain_split
     gauge_subdomain_stitch
     collect_propcomp 
@@ -50,7 +51,7 @@ foreach( EXEC ${ChromaMain_EXECUTABLES})
   target_link_libraries( ${EXEC} PUBLIC Chroma::chromalib )
 endforeach()
 
-INSTALL( TARGETS hmc const_hmc chroma purgaug cfgtransf smd compare_gauge gauge_subdomain_split gauge_subdomain_stitch
+INSTALL( TARGETS hmc const_hmc chroma purgaug cfgtransf smd compare_gauge gluecor_measure gauge_subdomain_split gauge_subdomain_stitch
 		 EXPORT ChromaTargets
 		 ARCHIVE DESTINATION lib
  		 LIBRARY  DESTINATION lib

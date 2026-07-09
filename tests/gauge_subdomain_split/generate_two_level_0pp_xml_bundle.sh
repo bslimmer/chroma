@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: generate_two_level_0pp_xml_bundle.sh [output_root [first_update [last_update [outer_step [child_updates [discard_updates [child_save_interval [bl_level_selected]]]]]]]]
+Usage: generate_two_level_0pp_xml_bundle.sh [options] [output_root [first_update [last_update [outer_step [child_updates [discard_updates [child_save_interval [bl_level_selected]]]]]]]]
 
 Defaults match the first concrete 8^4, 40 x 10 target:
   output_root         cfgs/two_level_0pp_40x10
@@ -15,15 +15,80 @@ Defaults match the first concrete 8^4, 40 x 10 target:
   child_save_interval 1
   bl_level_selected   1
 
+Options:
+  --parent-seed N
+      Parent HMC RNG seed. Default: 37.
+  --reuse-parent-root PATH
+      Reuse the aligned retained parent configs already saved under PATH.
+      The generator will point split/measurement XML for the reused prefix at
+      PATH/parent_outer_cfg_<update>.lime.
+  --reuse-parent-last-update N
+      Last retained parent update to reuse from --reuse-parent-root. The
+      reused prefix is FIRST_UPDATE..N in steps of OUTER_STEP. If N < LAST_UPDATE,
+      the generated parent HMC XML starts a fresh HMC leg from the saved gauge
+      config PATH/parent_outer_cfg_N.lime and only produces the missing later
+      retained parent samples under OUTPUT_ROOT.
+
 The script writes concrete run XML under:
   <output_root>/xml/
 EOF
 }
 
-if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-  usage
-  exit 0
-fi
+POSITIONAL_ARGS=()
+PARENT_SEED=37
+REUSE_PARENT_ROOT=""
+REUSE_PARENT_LAST_UPDATE=""
+
+while (( $# > 0 )); do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --parent-seed)
+      if [[ -z "${2:-}" ]]; then
+        echo "--parent-seed requires an integer argument" >&2
+        exit 1
+      fi
+      PARENT_SEED="$2"
+      shift 2
+      ;;
+    --reuse-parent-root)
+      if [[ -z "${2:-}" ]]; then
+        echo "--reuse-parent-root requires a path argument" >&2
+        exit 1
+      fi
+      REUSE_PARENT_ROOT="$2"
+      shift 2
+      ;;
+    --reuse-parent-last-update)
+      if [[ -z "${2:-}" ]]; then
+        echo "--reuse-parent-last-update requires an integer argument" >&2
+        exit 1
+      fi
+      REUSE_PARENT_LAST_UPDATE="$2"
+      shift 2
+      ;;
+    --)
+      shift
+      while (( $# > 0 )); do
+        POSITIONAL_ARGS+=("$1")
+        shift
+      done
+      ;;
+    -*)
+      echo "unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      POSITIONAL_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+set -- "${POSITIONAL_ARGS[@]}"
 
 OUTPUT_ROOT="${1:-cfgs/two_level_0pp_40x10}"
 FIRST_UPDATE="${2:-100}"
@@ -64,6 +129,14 @@ if (( BL_LEVEL_SELECTED < 0 )); then
   echo "bl_level_selected must be non-negative" >&2
   exit 1
 fi
+if [[ -n "${REUSE_PARENT_ROOT}" && -z "${REUSE_PARENT_LAST_UPDATE}" ]]; then
+  echo "--reuse-parent-last-update is required when --reuse-parent-root is set" >&2
+  exit 1
+fi
+if [[ -n "${REUSE_PARENT_LAST_UPDATE}" && -z "${REUSE_PARENT_ROOT}" ]]; then
+  echo "--reuse-parent-root is required when --reuse-parent-last-update is set" >&2
+  exit 1
+fi
 
 retained_span=$(( CHILD_UPDATES - DISCARD_UPDATES ))
 if (( retained_span % CHILD_SAVE_INTERVAL != 0 )); then
@@ -74,7 +147,56 @@ fi
 EXPECTED_MEASUREMENTS=$(( retained_span / CHILD_SAVE_INTERVAL ))
 OUTER_COUNT=$(( (LAST_UPDATE - FIRST_UPDATE) / OUTER_STEP + 1 ))
 
+PARENT_START_CFG_TYPE="UNIT"
+PARENT_START_CFG_FILE="DUMMY"
+PARENT_START_UPDATE=0
+PARENT_UPDATES_THIS_RUN="${LAST_UPDATE}"
+REUSED_OUTER_COUNT=0
+
+if [[ -n "${REUSE_PARENT_ROOT}" ]]; then
+  if [[ ! -d "${REUSE_PARENT_ROOT}" ]]; then
+    echo "reuse-parent-root does not exist: ${REUSE_PARENT_ROOT}" >&2
+    exit 1
+  fi
+  if (( REUSE_PARENT_LAST_UPDATE < FIRST_UPDATE )); then
+    echo "reuse-parent-last-update must be >= first_update" >&2
+    exit 1
+  fi
+  if (( REUSE_PARENT_LAST_UPDATE > LAST_UPDATE )); then
+    echo "reuse-parent-last-update must be <= last_update" >&2
+    exit 1
+  fi
+  if (( (REUSE_PARENT_LAST_UPDATE - FIRST_UPDATE) % OUTER_STEP != 0 )); then
+    echo "reuse-parent-last-update must lie on the requested outer-sample progression" >&2
+    exit 1
+  fi
+
+  for (( update_no = FIRST_UPDATE; update_no <= REUSE_PARENT_LAST_UPDATE; update_no += OUTER_STEP )); do
+    reuse_cfg_file="${REUSE_PARENT_ROOT}/parent_outer_cfg_${update_no}.lime"
+    if [[ ! -f "${reuse_cfg_file}" ]]; then
+      echo "missing reused parent config: ${reuse_cfg_file}" >&2
+      exit 1
+    fi
+  done
+
+  PARENT_START_CFG_TYPE="SCIDAC"
+  PARENT_START_CFG_FILE="${REUSE_PARENT_ROOT}/parent_outer_cfg_${REUSE_PARENT_LAST_UPDATE}.lime"
+  PARENT_START_UPDATE="${REUSE_PARENT_LAST_UPDATE}"
+  PARENT_UPDATES_THIS_RUN=$(( LAST_UPDATE - REUSE_PARENT_LAST_UPDATE ))
+  REUSED_OUTER_COUNT=$(( (REUSE_PARENT_LAST_UPDATE - FIRST_UPDATE) / OUTER_STEP + 1 ))
+fi
+
 mkdir -p "${XML_ROOT}"
+
+parent_cfg_file_for_update() {
+  local update_no="$1"
+
+  if [[ -n "${REUSE_PARENT_ROOT}" ]] && (( update_no <= REUSE_PARENT_LAST_UPDATE )); then
+    printf '%s\n' "${REUSE_PARENT_ROOT}/parent_outer_cfg_${update_no}.lime"
+  else
+    printf '%s\n' "${OUTPUT_ROOT}/parent_outer_cfg_${update_no}.lime"
+  fi
+}
 
 render_template() {
   local template_path="$1"
@@ -85,6 +207,7 @@ render_template() {
   local child_seed="$6"
   local meas_update="$7"
   local stream_id="$8"
+  local parent_cfg_file="$9"
 
   sed \
     -e "s|@OUTPUT_ROOT@|${OUTPUT_ROOT}|g" \
@@ -94,6 +217,12 @@ render_template() {
     -e "s|@CHILD_SEED@|${child_seed}|g" \
     -e "s|@PARENT_TOTAL_UPDATES@|${PARENT_TOTAL_UPDATES}|g" \
     -e "s|@OUTER_SAVE_INTERVAL@|${OUTER_STEP}|g" \
+    -e "s|@PARENT_SEED@|${PARENT_SEED}|g" \
+    -e "s|@PARENT_START_CFG_TYPE@|${PARENT_START_CFG_TYPE}|g" \
+    -e "s|@PARENT_START_CFG_FILE@|${PARENT_START_CFG_FILE}|g" \
+    -e "s|@PARENT_START_UPDATE@|${PARENT_START_UPDATE}|g" \
+    -e "s|@PARENT_UPDATES_THIS_RUN@|${PARENT_UPDATES_THIS_RUN}|g" \
+    -e "s|@PARENT_CFG_FILE@|${parent_cfg_file}|g" \
     -e "s|@CHILD_UPDATES@|${CHILD_UPDATES}|g" \
     -e "s|@DISCARD_UPDATES@|${DISCARD_UPDATES}|g" \
     -e "s|@CHILD_SAVE_INTERVAL@|${CHILD_SAVE_INTERVAL}|g" \
@@ -137,7 +266,8 @@ render_template \
   "0" \
   "${CHILD0_SEED_BASE}" \
   "0" \
-  "0"
+  "0" \
+  "${PARENT_START_CFG_FILE}"
 
 outer_sample_summary_lines=""
 sample_index=0
@@ -146,6 +276,7 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
   outer_sample_id="outer_${update_no}"
   child0_seed=$(( CHILD0_SEED_BASE + sample_index ))
   child1_seed=$(( CHILD1_SEED_BASE + sample_index ))
+  parent_cfg_file="$(parent_cfg_file_for_update "${update_no}")"
 
   mkdir -p "${OUTPUT_ROOT}/${outer_sample_id}"
 
@@ -157,7 +288,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
     "0" \
     "${child0_seed}" \
     "0" \
-    "0"
+    "0" \
+    "${parent_cfg_file}"
 
   render_template \
     "${SCRIPT_DIR}/hmc_child.temporal_zone_glueball_0pp_2lvl.template.ini.xml" \
@@ -167,7 +299,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
     "0" \
     "${child0_seed}" \
     "0" \
-    "0"
+    "0" \
+    "${parent_cfg_file}"
 
   render_template \
     "${SCRIPT_DIR}/hmc_child.temporal_zone_glueball_0pp_2lvl.template.ini.xml" \
@@ -177,7 +310,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
     "1" \
     "${child1_seed}" \
     "0" \
-    "0"
+    "0" \
+    "${parent_cfg_file}"
 
   render_template \
     "${SCRIPT_DIR}/measure_glueball_0pp_parent.template.ini.xml" \
@@ -187,7 +321,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
     "-1" \
     "0" \
     "0" \
-    "0"
+    "0" \
+    "${parent_cfg_file}"
 
   child0_measurement_lines=""
   child1_measurement_lines=""
@@ -204,7 +339,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
       "0" \
       "${child0_seed}" \
       "${meas_update}" \
-      "0"
+      "0" \
+      "${parent_cfg_file}"
 
     render_template \
       "${SCRIPT_DIR}/measure_glueball_0pp_child.template.ini.xml" \
@@ -214,7 +350,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
       "1" \
       "${child1_seed}" \
       "${meas_update}" \
-      "0"
+      "0" \
+      "${parent_cfg_file}"
 
     child0_measurement_lines="${child0_measurement_lines}      <elem>${OUTPUT_ROOT}/${outer_sample_id}/glueball_0pp.child0.stream0.meas_${meas_update}.summary.xml</elem>
 "
@@ -230,7 +367,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
     "-1" \
     "0" \
     "0" \
-    "0"
+    "0" \
+    "${parent_cfg_file}"
 
   render_block_template \
     "${SCRIPT_DIR}/glueball_0pp_child.template.check.ini.xml" \
@@ -258,7 +396,8 @@ for (( update_no = FIRST_UPDATE; update_no <= LAST_UPDATE; update_no += OUTER_ST
     "0" \
     "${child0_seed}" \
     "0" \
-    "0"
+    "0" \
+    "${parent_cfg_file}"
 
   outer_sample_summary_lines="${outer_sample_summary_lines}      <elem>${OUTPUT_ROOT}/${outer_sample_id}/glueball_0pp.two_level.summary.xml</elem>
 "
@@ -291,5 +430,15 @@ EOF
 echo "Generated two-level 0++ XML bundle under ${XML_ROOT}"
 echo "  parent_hmc: ${XML_ROOT}/hmc_parent.0pp_two_level_outer.ini.xml"
 echo "  outer_samples: ${OUTER_COUNT} (${FIRST_UPDATE}..${LAST_UPDATE} step ${OUTER_STEP})"
+if [[ -n "${REUSE_PARENT_ROOT}" ]]; then
+  echo "  reused_parent_prefix: ${REUSED_OUTER_COUNT} samples from ${REUSE_PARENT_ROOT} (${FIRST_UPDATE}..${REUSE_PARENT_LAST_UPDATE} step ${OUTER_STEP})"
+  if (( PARENT_UPDATES_THIS_RUN > 0 )); then
+    echo "  parent_extension_start: ${PARENT_START_CFG_FILE} (fresh HMC leg, StartUpdateNum=${PARENT_START_UPDATE})"
+  else
+    echo "  parent_extension_start: none (requested outer samples fully covered by reused parent prefix)"
+  fi
+else
+  echo "  reused_parent_prefix: none"
+fi
 echo "  retained_child_measurements_per_stream: ${EXPECTED_MEASUREMENTS}"
 echo "  outer_ensemble_check: ${XML_ROOT}/glueball_0pp_two_level.check.ini.xml"

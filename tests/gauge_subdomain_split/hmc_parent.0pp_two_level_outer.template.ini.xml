@@ -2,23 +2,23 @@
 <Params>
   <MCControl>
     <Cfg>
-      <cfg_type>UNIT</cfg_type>
-      <cfg_file>DUMMY</cfg_file>
+      <cfg_type>@PARENT_START_CFG_TYPE@</cfg_type>
+      <cfg_file>@PARENT_START_CFG_FILE@</cfg_file>
     </Cfg>
 
     <RNG>
       <Seed>
-        <elem>37</elem>
+        <elem>@PARENT_SEED@</elem>
         <elem>0</elem>
         <elem>0</elem>
         <elem>0</elem>
       </Seed>
     </RNG>
 
-    <StartUpdateNum>0</StartUpdateNum>
+    <StartUpdateNum>@PARENT_START_UPDATE@</StartUpdateNum>
     <NWarmUpUpdates>0</NWarmUpUpdates>
-    <NProductionUpdates>@PARENT_TOTAL_UPDATES@</NProductionUpdates>
-    <NUpdatesThisRun>@PARENT_TOTAL_UPDATES@</NUpdatesThisRun>
+    <NProductionUpdates>@PARENT_UPDATES_THIS_RUN@</NProductionUpdates>
+    <NUpdatesThisRun>@PARENT_UPDATES_THIS_RUN@</NUpdatesThisRun>
     <SaveInterval>@OUTER_SAVE_INTERVAL@</SaveInterval>
     <SavePrefix>@OUTPUT_ROOT@/parent_outer</SavePrefix>
     <SaveVolfmt>SINGLEFILE</SaveVolfmt>
@@ -54,7 +54,7 @@
       <tau0>0.1</tau0>
       <Integrator>
         <Name>LCM_STS_LEAPFROG</Name>
-        <n_steps>4</n_steps>
+        <n_steps>15</n_steps>
         <monomial_ids>
           <elem>gauge</elem>
         </monomial_ids>

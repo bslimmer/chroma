@@ -65,6 +65,21 @@ The current feature work has two closely related threads:
        existing `gluecor` path and then reduces them offline across the
        periodic, parent-window, child-summary, cross-domain, and
        outer-ensemble stages
+   - standalone thin gluecor CSV tool:
+     `mainprogs/main/gluecor_measure.cc`
+     - reads one saved gauge config, applies the usual blocked-link gluecor
+       path, and writes the underlying `op0[t]` array as a simple CSV
+     - defaults to `decay_dir = 3`, `bl_level = 1`, `BlkAccu = 1.0e-5`, and
+       `BlkMax = 50`, with command-line overrides for general use
+   - local directory launcher:
+     `tests/two_level_glueball/gluecor_measure_launch.sh`
+     - walks one directory of `.lime` or `.scidac` configs and launches the
+       standalone `gluecor_measure` executable once per file
+     - expects one lattice geometry per directory and takes that geometry from
+       `NROW="n0 n1 n2 n3"` in the environment
+     - now emits both the existing raw correlators and connected
+       `V_s^{-2}`-normalized correlators in its measurement summaries and CSV
+       outputs
      - the tracked `8^4` workflow now compares all available cross-domain
        separations for `support_guard = 0`, namely `delta_t_parent = 2..6`
      - `TWO_LEVEL_OUTER_ENSEMBLE` also accepts
@@ -90,6 +105,14 @@ The current feature work has two closely related threads:
      - first higher-statistics preset targets the first `8^4` evenly split
        production plan with `40` retained outer samples and `10` retained
        post-thinning child measurements per child stream
+     - the generator also supports reusing an aligned retained-parent prefix
+       from an existing `cfgs/...` directory via `--reuse-parent-root` and
+       `--reuse-parent-last-update`, then generating only the missing later
+       parent samples from the last reused saved gauge config
+     - current provisional `8^4` HMC tuning uses `tau0 = 0.1`,
+       `n_steps = 15` for the parent `8^4` stream and `tau0 = 0.1`,
+       `n_steps = 6` for the child `8^3 x 5` fixed-boundary streams,
+       targeting about `80%` acceptance
    - periodic `QACTDEN` correlator checker: `mainprogs/tests/t_qactden_0mp_corr.cc`
    - first periodic XML bundle: `tests/glueball_0mp/hmc_full_lattice.qactden_0mp.ini.xml`, `tests/glueball_0mp/qactden_0mp_corr.full_lattice.check.ini.xml`, and `tests/glueball_0mp/measure_unit_qactden_0mp.ini.xml`
    - first two-level XML bundle: `tests/gauge_subdomain_split/hmc_parent.0mp_two_level_outer.ini.xml`, `tests/gauge_subdomain_split/gauge_subdomain_split.0mp_two_level.outer_{100,200}.ini.xml`, `tests/gauge_subdomain_split/hmc_child{0,1}.temporal_zone_qactden_0mp_2lvl.outer_{100,200}.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_parent_window.outer_{100,200}.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_child{0,1}.outer_{100,200}.check.ini.xml`, `tests/gauge_subdomain_split/qactden_0mp_outer_sample.outer_{100,200}.check.ini.xml`, and `tests/gauge_subdomain_split/qactden_0mp_two_level.check.ini.xml`
@@ -134,6 +157,10 @@ Higher-statistics two-level XML generation:
 ```bash
 ./tests/gauge_subdomain_split/generate_two_level_0mp_xml_bundle.sh
 ./tests/gauge_subdomain_split/generate_two_level_0pp_xml_bundle.sh
+./tests/gauge_subdomain_split/generate_two_level_0pp_xml_bundle.sh \
+  --reuse-parent-root cfgs/two_level_0pp_10x10_baseline_jul03 \
+  --reuse-parent-last-update 140 \
+  cfgs/two_level_0pp_extend 50 1040 10 10 0 1 1
 ```
 
 Notes about the current recipe:
@@ -168,6 +195,9 @@ Current verification targets:
   pass against existing saved split configs, such as the local
   `cfgs/two_level_0mp/` run, where a low-stat outer-ensemble summary may use
   `Reducer/require_pass = false`.
+- `gluecor_measure` should build successfully and accept
+  `--nrow n0 n1 n2 n3 <cfg_file> <csv_file>` for thin saved-config `op0[t]`
+  dumps without routing through `t_glueball_0pp_corr`.
 - `t_hmc_momentum_bc_autodiscovery` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
 - `hmc` should complete a one-update child-sized gauge-only smoke run using `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`.
@@ -200,6 +230,9 @@ Legacy build context still matters:
   `cfgs/two_level_0pp_40x10/outer_*/` so parent saves, split sidecars, child
   HMC logs, post-HMC measurement summaries, reducer summaries, and generated
   workflow XML stay grouped by level-0 sample.
+- `tests/two_level_glueball/gluecor_measure_launch.sh` writes CSV outputs under
+  `gluecor_output/` inside the input directory unless `OUTPUT_ROOT` is
+  overridden.
 - Additional local smoke artifacts now seen in the repo root include `child_temporal_zone_smoke_cfg_*.lime` and `child_temporal_zone_smoke_restart_*.xml` when running the child HMC smoke input from the checkout root.
 - Keep generated outputs and temporary workspace files out of commits unless the change is explicitly about the bootstrap or test workflow itself.
 

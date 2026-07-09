@@ -49,6 +49,7 @@ namespace
     multi1d<Double> timeslice_operator;
     multi1d<Double> periodic_correlator_raw;
     multi1d<Double> periodic_correlator_gluecor_norm;
+    multi1d<Double> periodic_correlator_connected_norm;
     multi1d<Double> gluecor_correlator;
     Double gluecor_vac0;
 
@@ -154,6 +155,7 @@ namespace
     multi1d<int> pair_counts;
     multi1d<Double> timeslice_operator;
     multi1d<Double> correlator;
+    multi1d<Double> correlator_connected_norm;
     std::vector<ParentTimePair> pairs;
 
     ParentWindowSummary()
@@ -181,6 +183,9 @@ namespace
     multi1d<Double> two_level_correlator;
     multi1d<Double> parent_window_correlator;
     multi1d<Double> delta_correlator;
+    multi1d<Double> two_level_correlator_connected_norm;
+    multi1d<Double> parent_window_correlator_connected_norm;
+    multi1d<Double> delta_correlator_connected_norm;
     std::vector<ParentTimePair> pairs;
     LocalCorrelatorSummary child0_local_summary;
     LocalCorrelatorSummary child1_local_summary;
@@ -205,6 +210,12 @@ namespace
     multi1d<Double> stderr_parent_window_correlator;
     multi1d<Double> mean_delta_correlator;
     multi1d<Double> stderr_delta_correlator;
+    multi1d<Double> mean_two_level_correlator_connected_norm;
+    multi1d<Double> stderr_two_level_correlator_connected_norm;
+    multi1d<Double> mean_parent_window_correlator_connected_norm;
+    multi1d<Double> stderr_parent_window_correlator_connected_norm;
+    multi1d<Double> mean_delta_correlator_connected_norm;
+    multi1d<Double> stderr_delta_correlator_connected_norm;
     LocalCorrelatorSummary child0_local_summary;
     LocalCorrelatorSummary child1_local_summary;
     bool pass;
@@ -1026,6 +1037,138 @@ namespace
     return out;
   }
 
+  Double computeNormalizedVacuumExpectation(const multi1d<Double>& timeslice_operator,
+                                            int spatial_volume)
+  {
+    check(spatial_volume > 0, "spatial volume must be positive");
+    check(timeslice_operator.size() > 0,
+          "timeslice operator must be non-empty when computing vacuum expectation");
+
+    double accum = 0.0;
+    for (int t = 0; t < timeslice_operator.size(); ++t)
+      accum += toDouble(timeslice_operator[t]);
+
+    return Double(accum / double(timeslice_operator.size() * spatial_volume));
+  }
+
+  multi1d<Double> buildConnectedPeriodicCorrelator(
+    const multi1d<Double>& timeslice_operator,
+    int spatial_volume,
+    const Double& normalized_vacuum_expectation,
+    int max_dt)
+  {
+    check(spatial_volume > 0, "spatial volume must be positive");
+    check(max_dt >= 0, "max_dt must be non-negative");
+    check(max_dt < timeslice_operator.size(),
+          "max_dt must be smaller than the timeslice operator extent");
+
+    const double inv_spatial_volume = 1.0 / double(spatial_volume);
+    const double mu = toDouble(normalized_vacuum_expectation);
+    multi1d<Double> connected(max_dt + 1);
+    connected = zero;
+
+    for (int dt = 0; dt <= max_dt; ++dt)
+    {
+      double accum = 0.0;
+      for (int t0 = 0; t0 < timeslice_operator.size(); ++t0)
+      {
+        const int t1 = (t0 + dt) % timeslice_operator.size();
+        const double op0 =
+          toDouble(timeslice_operator[t0]) * inv_spatial_volume - mu;
+        const double op1 =
+          toDouble(timeslice_operator[t1]) * inv_spatial_volume - mu;
+        accum += op0 * op1;
+      }
+      connected[dt] = Double(accum / double(timeslice_operator.size()));
+    }
+
+    return connected;
+  }
+
+  multi1d<Double> buildConnectedParentPairCorrelator(
+    const multi1d<Double>& timeslice_operator,
+    int spatial_volume,
+    const multi1d<int>& delta_t_parent_set,
+    const multi1d<int>& pair_counts,
+    const std::vector<ParentTimePair>& pairs)
+  {
+    const double inv_spatial_volume = 1.0 / double(spatial_volume);
+    const double mu =
+      toDouble(computeNormalizedVacuumExpectation(timeslice_operator,
+                                                  spatial_volume));
+    multi1d<Double> connected(delta_t_parent_set.size());
+    connected = zero;
+
+    for (int i = 0; i < delta_t_parent_set.size(); ++i)
+    {
+      const int delta_t_parent = delta_t_parent_set[i];
+      const int pair_count = pair_counts[i];
+      if (pair_count == 0)
+        continue;
+
+      double accum = 0.0;
+      for (std::size_t j = 0; j < pairs.size(); ++j)
+      {
+        if (pairs[j].delta_t_parent != delta_t_parent)
+          continue;
+
+        const double op0 =
+          toDouble(timeslice_operator[pairs[j].parent_t0]) * inv_spatial_volume - mu;
+        const double op1 =
+          toDouble(timeslice_operator[pairs[j].parent_t1]) * inv_spatial_volume - mu;
+        accum += op1 * op0;
+      }
+
+      connected[i] = Double(accum / double(pair_count));
+    }
+
+    return connected;
+  }
+
+  multi1d<Double> buildConnectedChildPairCorrelator(
+    const multi1d<Double>& child0_mean_timeslice_operator,
+    const multi1d<Double>& child1_mean_timeslice_operator,
+    int spatial_volume,
+    const Double& normalized_vacuum_expectation,
+    const multi1d<int>& delta_t_parent_set,
+    const multi1d<int>& pair_counts,
+    const std::vector<ParentTimePair>& pairs)
+  {
+    const double inv_spatial_volume = 1.0 / double(spatial_volume);
+    const double mu = toDouble(normalized_vacuum_expectation);
+    multi1d<Double> connected(delta_t_parent_set.size());
+    connected = zero;
+
+    for (int i = 0; i < delta_t_parent_set.size(); ++i)
+    {
+      const int delta_t_parent = delta_t_parent_set[i];
+      const int pair_count = pair_counts[i];
+      if (pair_count == 0)
+        continue;
+
+      double accum = 0.0;
+      for (std::size_t j = 0; j < pairs.size(); ++j)
+      {
+        if (pairs[j].delta_t_parent != delta_t_parent)
+          continue;
+
+        const double op0 =
+          toDouble(child0_mean_timeslice_operator[pairs[j].child0_local_t]) *
+            inv_spatial_volume -
+          mu;
+        const double op1 =
+          toDouble(child1_mean_timeslice_operator[pairs[j].child1_local_t]) *
+            inv_spatial_volume -
+          mu;
+        accum += op1 * op0;
+      }
+
+      connected[i] = Double(accum / double(pair_count));
+    }
+
+    return connected;
+  }
+
   int computeMaxBlockingLevel(const multi1d<int>& nrow, int decay_dir)
   {
     int bl_level_max = nrow[0];
@@ -1167,6 +1310,11 @@ namespace
     summary.periodic_correlator_gluecor_norm =
       normalizeBySpatialVolume(summary.periodic_correlator_raw,
                                summary.spatial_volume);
+    summary.periodic_correlator_connected_norm =
+      buildConnectedPeriodicCorrelator(summary.timeslice_operator,
+                                       summary.spatial_volume,
+                                       summary.gluecor_vac0,
+                                       max_dt);
 
     check(summary.gluecor_correlator.size() == summary.periodic_correlator_gluecor_norm.size(),
           "built-in gluecor output length mismatch");
@@ -1207,6 +1355,9 @@ namespace
     write(xml,
           "periodic_correlator_gluecor_norm",
           measurement.periodic_correlator_gluecor_norm);
+    write(xml,
+          "periodic_correlator_connected_norm",
+          measurement.periodic_correlator_connected_norm);
     write(xml, "gluecor_correlator", measurement.gluecor_correlator);
     write(xml, "gluecor_vac0", measurement.gluecor_vac0);
     pop(xml);
@@ -1252,8 +1403,22 @@ namespace
          measurement.periodic_correlator_raw);
     read(measurement_xml, "periodic_correlator_gluecor_norm",
          measurement.periodic_correlator_gluecor_norm);
+    if (hasPath(measurement_xml, "periodic_correlator_connected_norm"))
+    {
+      read(measurement_xml, "periodic_correlator_connected_norm",
+           measurement.periodic_correlator_connected_norm);
+    }
     read(measurement_xml, "gluecor_correlator", measurement.gluecor_correlator);
     read(measurement_xml, "gluecor_vac0", measurement.gluecor_vac0);
+
+    if (measurement.periodic_correlator_connected_norm.size() == 0)
+    {
+      measurement.periodic_correlator_connected_norm =
+        buildConnectedPeriodicCorrelator(measurement.timeslice_operator,
+                                         measurement.spatial_volume,
+                                         measurement.gluecor_vac0,
+                                         measurement.periodic_correlator_raw.size() - 1);
+    }
 
     return measurement;
   }
@@ -1484,6 +1649,9 @@ namespace
                                        const multi1d<int>& target_delta_set,
                                        const std::string& label)
   {
+    check(source_delta_set.size() == source_values.size(),
+          label + " delta/value size mismatch");
+
     multi1d<Double> out(target_delta_set.size());
     out = zero;
 
@@ -1589,6 +1757,12 @@ namespace
           << "\n";
       out << measurement.stream_id
           << "," << measurement.update_no
+          << ",C_periodic_connected_norm,"
+          << dt
+          << "," << toDouble(measurement.periodic_correlator_connected_norm[dt])
+          << "\n";
+      out << measurement.stream_id
+          << "," << measurement.update_no
           << ",C_gluecor_builtin,"
           << dt
           << "," << toDouble(measurement.gluecor_correlator[dt])
@@ -1599,7 +1773,8 @@ namespace
   void writePeriodicSummary(const CheckerInput& input,
                             const RawMeasurementSummary& prototype,
                             const std::vector<MeasurementResult>& measurements,
-                            const std::vector<multi1d<Double> >& gluecor_series)
+                            const std::vector<multi1d<Double> >& gluecor_series,
+                            const std::vector<multi1d<Double> >& connected_norm_series)
   {
     if (input.summary_file.empty())
       return;
@@ -1634,6 +1809,8 @@ namespace
       normalized.push_back(normalizeBySpatialVolume(measurements[i].correlator,
                                                     prototype.spatial_volume));
     write(xml_out, "mean_correlator_gluecor_norm", computeMeanSeries(normalized));
+    write(xml_out, "mean_correlator_connected_norm",
+          computeMeanSeries(connected_norm_series));
     write(xml_out, "mean_builtin_gluecor_correlator", computeMeanSeries(gluecor_series));
     writeMeasurementList(xml_out, "Measurements", measurements);
 
@@ -1792,6 +1969,7 @@ namespace
     push(xml_out, "Measurement");
     write(xml_out, "timeslice_operator", summary.timeslice_operator);
     write(xml_out, "correlator", summary.correlator);
+    write(xml_out, "correlator_connected_norm", summary.correlator_connected_norm);
     pop(xml_out);
 
     pop(xml_out);
@@ -1833,6 +2011,21 @@ namespace
     XMLReader measurement_xml(summary_xml, "Measurement");
     read(measurement_xml, "timeslice_operator", summary.timeslice_operator);
     read(measurement_xml, "correlator", summary.correlator);
+    if (hasPath(measurement_xml, "correlator_connected_norm"))
+    {
+      read(measurement_xml, "correlator_connected_norm",
+           summary.correlator_connected_norm);
+    }
+
+    if (summary.correlator_connected_norm.size() == 0)
+    {
+      summary.correlator_connected_norm =
+        buildConnectedParentPairCorrelator(summary.timeslice_operator,
+                                           summary.spatial_volume,
+                                           summary.delta_t_parent_set,
+                                           summary.pair_counts,
+                                           summary.pairs);
+    }
 
     return summary;
   }
@@ -1871,6 +2064,12 @@ namespace
     write(xml_out, "two_level_correlator", summary.two_level_correlator);
     write(xml_out, "parent_window_correlator", summary.parent_window_correlator);
     write(xml_out, "delta_correlator", summary.delta_correlator);
+    write(xml_out, "two_level_correlator_connected_norm",
+          summary.two_level_correlator_connected_norm);
+    write(xml_out, "parent_window_correlator_connected_norm",
+          summary.parent_window_correlator_connected_norm);
+    write(xml_out, "delta_correlator_connected_norm",
+          summary.delta_correlator_connected_norm);
     pop(xml_out);
 
     write(xml_out, "Child0LocalCorrelator", summary.child0_local_summary);
@@ -1913,6 +2112,21 @@ namespace
     read(observables_xml, "parent_window_correlator",
          summary.parent_window_correlator);
     read(observables_xml, "delta_correlator", summary.delta_correlator);
+    if (hasPath(observables_xml, "two_level_correlator_connected_norm"))
+    {
+      read(observables_xml, "two_level_correlator_connected_norm",
+           summary.two_level_correlator_connected_norm);
+    }
+    if (hasPath(observables_xml, "parent_window_correlator_connected_norm"))
+    {
+      read(observables_xml, "parent_window_correlator_connected_norm",
+           summary.parent_window_correlator_connected_norm);
+    }
+    if (hasPath(observables_xml, "delta_correlator_connected_norm"))
+    {
+      read(observables_xml, "delta_correlator_connected_norm",
+           summary.delta_correlator_connected_norm);
+    }
 
     read(summary_xml, "Child0LocalCorrelator", summary.child0_local_summary);
     read(summary_xml, "Child1LocalCorrelator", summary.child1_local_summary);
@@ -1940,6 +2154,12 @@ namespace
     write(xml_out, "parent_window_correlator",
           summary.mean_parent_window_correlator);
     write(xml_out, "delta_correlator", summary.mean_delta_correlator);
+    write(xml_out, "two_level_correlator_connected_norm",
+          summary.mean_two_level_correlator_connected_norm);
+    write(xml_out, "parent_window_correlator_connected_norm",
+          summary.mean_parent_window_correlator_connected_norm);
+    write(xml_out, "delta_correlator_connected_norm",
+          summary.mean_delta_correlator_connected_norm);
     pop(xml_out);
 
     push(xml_out, "Stderr");
@@ -1947,6 +2167,12 @@ namespace
     write(xml_out, "parent_window_correlator",
           summary.stderr_parent_window_correlator);
     write(xml_out, "delta_correlator", summary.stderr_delta_correlator);
+    write(xml_out, "two_level_correlator_connected_norm",
+          summary.stderr_two_level_correlator_connected_norm);
+    write(xml_out, "parent_window_correlator_connected_norm",
+          summary.stderr_parent_window_correlator_connected_norm);
+    write(xml_out, "delta_correlator_connected_norm",
+          summary.stderr_delta_correlator_connected_norm);
     pop(xml_out);
 
     write(xml_out, "Child0LocalCorrelator", summary.child0_local_summary);
@@ -2013,6 +2239,58 @@ namespace
 
     check(found, "failed to locate retained 0++ measurement at requested update");
     return match;
+  }
+
+  void writePeriodicMeasurementCsv(
+    const CheckerInput& input,
+    const std::vector<MeasurementResult>& measurements,
+    const std::vector<multi1d<Double> >& connected_norm_series)
+  {
+    if (input.csv_file.empty())
+      return;
+
+    check(measurements.size() == connected_norm_series.size(),
+          "periodic CSV connected-series count mismatch");
+
+    std::ofstream out(input.csv_file.c_str());
+    check(out.good(), "failed to open CSV output file");
+
+    out << "stream_id,update_no,series,index,value,num_sources\n";
+    out << std::setprecision(17);
+
+    for (std::size_t i = 0; i < measurements.size(); ++i)
+    {
+      check(measurements[i].correlator.size() == connected_norm_series[i].size(),
+            "periodic CSV correlator length mismatch");
+
+      for (int t = 0; t < measurements[i].timeslice_operator.size(); ++t)
+      {
+        out << measurements[i].stream_id
+            << "," << measurements[i].update_no
+            << ",O_0pp,"
+            << t
+            << "," << toDouble(measurements[i].timeslice_operator[t])
+            << ",\n";
+      }
+
+      for (int dt = 0; dt < measurements[i].correlator.size(); ++dt)
+      {
+        out << measurements[i].stream_id
+            << "," << measurements[i].update_no
+            << ",C_periodic_raw,"
+            << dt
+            << "," << toDouble(measurements[i].correlator[dt])
+            << "," << measurements[i].num_sources[dt]
+            << "\n";
+        out << measurements[i].stream_id
+            << "," << measurements[i].update_no
+            << ",C_periodic_connected_norm,"
+            << dt
+            << "," << toDouble(connected_norm_series[i][dt])
+            << "," << measurements[i].num_sources[dt]
+            << "\n";
+      }
+    }
   }
 
   void writeMeasurementCsv(const CheckerInput& input,
@@ -2082,6 +2360,11 @@ namespace
           << toDouble(summary.correlator[i])
           << "," << summary.pair_counts[i]
           << "\n";
+      out << summary.delta_t_parent_set[i]
+          << ",parent_window_connected_norm,,,,,"
+          << toDouble(summary.correlator_connected_norm[i])
+          << "," << summary.pair_counts[i]
+          << "\n";
     }
   }
 
@@ -2115,13 +2398,28 @@ namespace
           << "," << summary.pair_counts[i]
           << "\n";
       out << summary.delta_t_parent_set[i]
+          << ",two_level_connected_norm,,,,,"
+          << toDouble(summary.two_level_correlator_connected_norm[i])
+          << "," << summary.pair_counts[i]
+          << "\n";
+      out << summary.delta_t_parent_set[i]
           << ",parent_window,,,,,"
           << toDouble(summary.parent_window_correlator[i])
           << "," << summary.pair_counts[i]
           << "\n";
       out << summary.delta_t_parent_set[i]
+          << ",parent_window_connected_norm,,,,,"
+          << toDouble(summary.parent_window_correlator_connected_norm[i])
+          << "," << summary.pair_counts[i]
+          << "\n";
+      out << summary.delta_t_parent_set[i]
           << ",delta,,,,,"
           << toDouble(summary.delta_correlator[i])
+          << "," << summary.pair_counts[i]
+          << "\n";
+      out << summary.delta_t_parent_set[i]
+          << ",delta_connected_norm,,,,,"
+          << toDouble(summary.delta_correlator_connected_norm[i])
           << "," << summary.pair_counts[i]
           << "\n";
     }
@@ -2143,12 +2441,24 @@ namespace
       out << "two_level," << summary.delta_t_parent_set[i]
           << "," << toDouble(summary.mean_two_level_correlator[i])
           << "," << toDouble(summary.stderr_two_level_correlator[i]) << "\n";
+      out << "two_level_connected_norm," << summary.delta_t_parent_set[i]
+          << "," << toDouble(summary.mean_two_level_correlator_connected_norm[i])
+          << "," << toDouble(summary.stderr_two_level_correlator_connected_norm[i])
+          << "\n";
       out << "parent_window," << summary.delta_t_parent_set[i]
           << "," << toDouble(summary.mean_parent_window_correlator[i])
           << "," << toDouble(summary.stderr_parent_window_correlator[i]) << "\n";
+      out << "parent_window_connected_norm," << summary.delta_t_parent_set[i]
+          << "," << toDouble(summary.mean_parent_window_correlator_connected_norm[i])
+          << "," << toDouble(summary.stderr_parent_window_correlator_connected_norm[i])
+          << "\n";
       out << "delta," << summary.delta_t_parent_set[i]
           << "," << toDouble(summary.mean_delta_correlator[i])
           << "," << toDouble(summary.stderr_delta_correlator[i]) << "\n";
+      out << "delta_connected_norm," << summary.delta_t_parent_set[i]
+          << "," << toDouble(summary.mean_delta_correlator_connected_norm[i])
+          << "," << toDouble(summary.stderr_delta_correlator_connected_norm[i])
+          << "\n";
     }
 
     for (int i = 0; i < summary.child0_local_summary.delta_t_child_set.size(); ++i)
@@ -2185,6 +2495,7 @@ namespace
   {
     std::vector<MeasurementResult> reduced;
     std::vector<multi1d<Double> > builtin_gluecor_series;
+    std::vector<multi1d<Double> > connected_norm_series;
     RawMeasurementSummary prototype;
     bool have_prototype = false;
 
@@ -2196,6 +2507,10 @@ namespace
       MeasurementResult periodic = reducePeriodicMeasurement(raw, input.max_dt);
       reduced.push_back(periodic);
       builtin_gluecor_series.push_back(raw.gluecor_correlator);
+      multi1d<Double> connected_trimmed(input.max_dt + 1);
+      for (int dt = 0; dt <= input.max_dt; ++dt)
+        connected_trimmed[dt] = raw.periodic_correlator_connected_norm[dt];
+      connected_norm_series.push_back(connected_trimmed);
 
       const multi1d<Double> derived =
         normalizeBySpatialVolume(periodic.correlator, raw.spatial_volume);
@@ -2213,6 +2528,7 @@ namespace
       }
     }
 
+    writePeriodicMeasurementCsv(input, reduced, connected_norm_series);
     sortMeasurements(reduced);
     runMeasurementChecks(input, reduced, 0);
     std::vector<multi1d<Double> > builtin_trimmed;
@@ -2224,8 +2540,11 @@ namespace
         trimmed[dt] = builtin_gluecor_series[i][dt];
       builtin_trimmed.push_back(trimmed);
     }
-    writePeriodicSummary(input, prototype, reduced, builtin_trimmed);
-    writeMeasurementCsv(input, reduced, "C_periodic_raw");
+    writePeriodicSummary(input,
+                         prototype,
+                         reduced,
+                         builtin_trimmed,
+                         connected_norm_series);
 
     QDPIO::cout << "t_glueball_0pp_corr: passed" << std::endl;
     QDPIO::cout << "  mode: " << input.mode << std::endl;
@@ -2389,6 +2708,13 @@ namespace
       summary.correlator[i] = Double(accum / double(pair_count));
     }
 
+    summary.correlator_connected_norm =
+      buildConnectedParentPairCorrelator(summary.timeslice_operator,
+                                         summary.spatial_volume,
+                                         summary.delta_t_parent_set,
+                                         summary.pair_counts,
+                                         summary.pairs);
+
     if (input.expected_pairs.size() > 0)
       checkExpectedCountsForLabels(input.expected_pairs,
                                    summary.delta_t_parent_set,
@@ -2499,8 +2825,21 @@ namespace
                            parent.correlator,
                            delta_t_parent_set,
                            "parent window correlator");
+    summary.parent_window_correlator_connected_norm =
+      readArrayForDeltaSet(parent.delta_t_parent_set,
+                           parent.correlator_connected_norm,
+                           delta_t_parent_set,
+                           "parent window connected correlator");
     summary.delta_correlator.resize(delta_t_parent_set.size());
     summary.delta_correlator = zero;
+    summary.two_level_correlator_connected_norm.resize(delta_t_parent_set.size());
+    summary.two_level_correlator_connected_norm = zero;
+    summary.delta_correlator_connected_norm.resize(delta_t_parent_set.size());
+    summary.delta_correlator_connected_norm = zero;
+
+    const Double normalized_vacuum_expectation =
+      computeNormalizedVacuumExpectation(parent.timeslice_operator,
+                                         parent.spatial_volume);
 
     for (int i = 0; i < delta_t_parent_set.size(); ++i)
     {
@@ -2521,6 +2860,22 @@ namespace
       summary.two_level_correlator[i] = Double(accum / double(pair_count));
       summary.delta_correlator[i] =
         summary.two_level_correlator[i] - summary.parent_window_correlator[i];
+    }
+
+    summary.two_level_correlator_connected_norm =
+      buildConnectedChildPairCorrelator(child0.conditional_mean_timeslice_operator,
+                                        child1.conditional_mean_timeslice_operator,
+                                        parent.spatial_volume,
+                                        normalized_vacuum_expectation,
+                                        delta_t_parent_set,
+                                        pair_counts,
+                                        pairs);
+
+    for (int i = 0; i < delta_t_parent_set.size(); ++i)
+    {
+      summary.delta_correlator_connected_norm[i] =
+        summary.two_level_correlator_connected_norm[i] -
+        summary.parent_window_correlator_connected_norm[i];
     }
 
     summary.child0_local_summary = child0.child_local_summary;
@@ -2560,6 +2915,9 @@ namespace
     std::vector<multi1d<Double> > two_level_values;
     std::vector<multi1d<Double> > parent_values;
     std::vector<multi1d<Double> > delta_values;
+    std::vector<multi1d<Double> > two_level_connected_values;
+    std::vector<multi1d<Double> > parent_connected_values;
+    std::vector<multi1d<Double> > delta_connected_values;
     std::vector<multi1d<Double> > child0_local_values;
     std::vector<multi1d<Double> > child1_local_values;
 
@@ -2586,6 +2944,25 @@ namespace
                                                   summaries[i].delta_correlator,
                                                   delta_t_parent_set,
                                                   "delta correlator"));
+      check(summaries[i].two_level_correlator_connected_norm.size() > 0 &&
+            summaries[i].parent_window_correlator_connected_norm.size() > 0 &&
+            summaries[i].delta_correlator_connected_norm.size() > 0,
+            "outer sample summary is missing connected-normalized observables; rerun TWO_LEVEL_CROSS_DOMAIN with the current t_glueball_0pp_corr binary");
+      two_level_connected_values.push_back(
+        readArrayForDeltaSet(summaries[i].delta_t_parent_set,
+                             summaries[i].two_level_correlator_connected_norm,
+                             delta_t_parent_set,
+                             "two-level connected correlator"));
+      parent_connected_values.push_back(
+        readArrayForDeltaSet(summaries[i].delta_t_parent_set,
+                             summaries[i].parent_window_correlator_connected_norm,
+                             delta_t_parent_set,
+                             "parent-window connected correlator"));
+      delta_connected_values.push_back(
+        readArrayForDeltaSet(summaries[i].delta_t_parent_set,
+                             summaries[i].delta_correlator_connected_norm,
+                             delta_t_parent_set,
+                             "delta connected correlator"));
 
       check(sameIntList(summaries[i].child0_local_summary.delta_t_child_set,
                         child0_delta_t_child_set),
@@ -2618,6 +2995,24 @@ namespace
                                              summary.mean_parent_window_correlator),
                           parent_values.size());
     summary.mean_delta_correlator = computeMeanSeries(delta_values);
+    summary.mean_two_level_correlator_connected_norm =
+      computeMeanSeries(two_level_connected_values);
+    summary.stderr_two_level_correlator_connected_norm =
+      computeSampleStderr(computeStddevSeries(two_level_connected_values,
+                                             summary.mean_two_level_correlator_connected_norm),
+                          two_level_connected_values.size());
+    summary.mean_parent_window_correlator_connected_norm =
+      computeMeanSeries(parent_connected_values);
+    summary.stderr_parent_window_correlator_connected_norm =
+      computeSampleStderr(computeStddevSeries(parent_connected_values,
+                                             summary.mean_parent_window_correlator_connected_norm),
+                          parent_connected_values.size());
+    summary.mean_delta_correlator_connected_norm =
+      computeMeanSeries(delta_connected_values);
+    summary.stderr_delta_correlator_connected_norm =
+      computeSampleStderr(computeStddevSeries(delta_connected_values,
+                                             summary.mean_delta_correlator_connected_norm),
+                          delta_connected_values.size());
 
     const multi1d<Double> delta_stddev =
       computeStddevSeries(delta_values, summary.mean_delta_correlator);

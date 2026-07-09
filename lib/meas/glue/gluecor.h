@@ -16,22 +16,28 @@ namespace Chroma
    * \ingroup glue
    *
    * Construct 0++, 2++ and 1+- glueball correlation functions from
-   * fuzzy links at blocking level bl_level and Write them in 
-   * XML format.
+   * fuzzy links at blocking level bl_level and write them in XML
+   * format unless simple_output is enabled.
    *
    * Warning: this works only for Nd = 4 !
    *
    * \param xml_out       xml file object ( Write )
-   * \param xml_group     std::string used for writing xml data ( Read )
+   * \param xml_group     std::string used for writing xml data, or a CSV
+   *                      basename when simple_output is true ( Read )
    * \param u             (blocked) gauge field ( Read )
    * \param bl_level      blocking level ( Read )
    * \param phases        object holds list of momenta and Fourier phases ( Read )
+   * \param simple_output if true, write op0 to CSV instead of XML ( Read )
+   * \param simple_output_file optional CSV path override for simple_output
+   *                           mode ( Read )
    */
 
   void gluecor(XMLWriter& xml_out, const std::string& xml_group,
 	       const multi1d<LatticeColorMatrix>& u, 
 	       const SftMom& phases,
-	       int bl_level);
+	       int bl_level,
+	       bool simple_output = false,
+	       const std::string& simple_output_file = "");
 
 }  // end namespace Chroma
 
