@@ -52,7 +52,7 @@ That will:
 ```
 
 - `bootstrap` stops after QDPXX install and Chroma configure.
-- `build-tests` builds the focused boundary-condition, subdomain-validation, and smoke-run targets.
+- `build-tests` builds the focused boundary-condition, subdomain-validation, smoke-run, and `gluecor_measure` targets.
 - `run-tests` runs `t_temporal_zone_gaugebc`, `t_hmc_momentum_bc_autodiscovery`, and the `t_leapfrog` temporal-zone smoke input after building them.
 
 ## Useful overrides

@@ -312,6 +312,7 @@ build_tests() {
       t_hmc_momentum_bc_autodiscovery \
       t_gauge_subdomain_split \
       t_gauge_subdomain_gauge_hmc_validation \
+      gluecor_measure \
       hmc \
       gauge_subdomain_split \
     -j"${JOBS}"
@@ -340,6 +341,7 @@ Outputs:
   t_leapfrog log xml:      ${LEAPFROG_LOG}
   t_leapfrog output xml:   ${LEAPFROG_OUT}
   hmc executable:          ${CHROMA_BUILD}/mainprogs/main/hmc
+  gluecor_measure:         ${CHROMA_BUILD}/mainprogs/main/gluecor_measure
   gauge_subdomain_split:   ${CHROMA_BUILD}/mainprogs/main/gauge_subdomain_split
   t_gauge_subdomain_gauge_hmc_validation:
                            ${CHROMA_BUILD}/mainprogs/tests/t_gauge_subdomain_gauge_hmc_validation

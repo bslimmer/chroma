@@ -4,10 +4,13 @@ set -euo pipefail
 # Simple gluecor CSV launcher for every config in one directory.
 # Usage: ./gluecor_measure_launch.sh <config_dir>
 
-CHROMA_BUILD="${CHROMA_BUILD:-/private/tmp/chroma-build/chroma-localbinarydb-0pppatch}"
-MEASURE_BIN="${MEASURE_BIN:-$CHROMA_BUILD/mainprogs/main/gluecor_measure}"
+CHROMA_BUILD="${CHROMA_BUILD:-/private/tmp/chroma-build-codex-gluecor/chroma-localbinarydb}"
+MEASURE_BIN="${MEASURE_BIN:-}"
 
-NROW="${NROW:-8 8 8 16}"
+#Below is for child matrices
+NROW="${NROW:-8 8 8 9}"
+#Below is for parent matrices
+#NROW="${NROW:-8 8 8 16}"
 DECAY_DIR="${DECAY_DIR:-3}"
 BL_LEVEL="${BL_LEVEL:-1}"
 BLK_ACCU="${BLK_ACCU:-1.0e-5}"
@@ -20,6 +23,30 @@ CFG_TYPE_SCIDAC="${CFG_TYPE_SCIDAC:-SCIDAC}"
 usage() {
   echo "Usage: $0 <config_dir>" >&2
   echo "Set NROW=\"n0 n1 n2 n3\" to match the configs in that directory." >&2
+  echo "Optional overrides: CHROMA_BUILD=/path/to/chroma-build or MEASURE_BIN=/path/to/gluecor_measure." >&2
+}
+
+resolve_measure_bin() {
+  local candidate
+
+  if [[ -n "$MEASURE_BIN" ]]; then
+    printf '%s\n' "$MEASURE_BIN"
+    return
+  fi
+
+  for candidate in \
+    "$CHROMA_BUILD/mainprogs/main/gluecor_measure" \
+    "/private/tmp/chroma-build-codex-gluecor/chroma-localbinarydb/mainprogs/main/gluecor_measure" \
+    "/private/tmp/chroma-build-codex-gluecor/chroma-localbinarydb-0pppatch/mainprogs/main/gluecor_measure" \
+    "/private/tmp/chroma-build/chroma-localbinarydb-0pppatch/mainprogs/main/gluecor_measure"
+  do
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
+
+  printf '%s\n' "$CHROMA_BUILD/mainprogs/main/gluecor_measure"
 }
 
 infer_cfg_type() {
@@ -55,8 +82,11 @@ if [[ ! -d "$1" ]]; then
   exit 1
 fi
 
+MEASURE_BIN="$(resolve_measure_bin)"
+
 if [[ ! -x "$MEASURE_BIN" ]]; then
   echo "ERROR: measurement binary not found or not executable: $MEASURE_BIN" >&2
+  echo "Set MEASURE_BIN to the executable path or CHROMA_BUILD to the matching build tree." >&2
   exit 1
 fi
 
@@ -71,13 +101,22 @@ OUTPUT_ROOT="${OUTPUT_ROOT:-$INPUT_DIR/gluecor_output}"
 
 mkdir -p "$OUTPUT_ROOT"
 
-count=0
+total_count=0
+measured_count=0
+skipped_count=0
 
 while IFS= read -r -d '' cfg_file; do
+  total_count=$((total_count + 1))
   cfg_name="$(basename "$cfg_file")"
   cfg_stem="${cfg_name%.*}"
   cfg_type="$(infer_cfg_type "$cfg_file")"
   csv_file="$OUTPUT_ROOT/${cfg_stem}.gluecor.csv"
+
+  if [[ -e "$csv_file" ]]; then
+    echo "Skipping ${cfg_name}: found existing csv ${csv_file}"
+    skipped_count=$((skipped_count + 1))
+    continue
+  fi
 
   echo "Measuring ${cfg_name}"
   "$MEASURE_BIN" \
@@ -91,14 +130,16 @@ while IFS= read -r -d '' cfg_file; do
     "$csv_file"
   echo "  csv: ${csv_file}"
 
-  count=$((count + 1))
+  measured_count=$((measured_count + 1))
 done < <(find "$INPUT_DIR" -maxdepth 1 \( -type f -o -type l \) \( -name '*.lime' -o -name '*.scidac' \) -print0)
 
-if [[ "$count" -eq 0 ]]; then
+if [[ "$total_count" -eq 0 ]]; then
   echo "ERROR: no .lime or .scidac config files found in ${INPUT_DIR}" >&2
   exit 1
 fi
 
 echo "Done."
-echo "Processed configs: ${count}"
+echo "Found configs: ${total_count}"
+echo "Measured configs: ${measured_count}"
+echo "Skipped existing: ${skipped_count}"
 echo "Output directory: ${OUTPUT_ROOT}"

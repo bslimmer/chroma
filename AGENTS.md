@@ -77,6 +77,8 @@ The current feature work has two closely related threads:
        standalone `gluecor_measure` executable once per file
      - expects one lattice geometry per directory and takes that geometry from
        `NROW="n0 n1 n2 n3"` in the environment
+     - skips any child config whose matching
+       `gluecor_output/<cfg_stem>.gluecor.csv` already exists
      - now emits both the existing raw correlators and connected
        `V_s^{-2}`-normalized correlators in its measurement summaries and CSV
        outputs
@@ -167,6 +169,9 @@ Notes about the current recipe:
 
 - The source path contains spaces, so the bootstrap script builds through a no-space alias at `/private/tmp/chroma-ws`.
 - The tested QDPXX branch for this checkout is `origin/eloy/localbinarydb`.
+- `./scripts/bootstrap_local_qdpxx_build.sh build-tests` now also builds
+  `mainprogs/main/gluecor_measure` in addition to the focused test and smoke
+  targets.
 - If that ref already exists locally and network fetches are unavailable, set `QDPXX_SKIP_FETCH=1`; the bootstrap script will reuse the local ref, repopulate QDPXX `other_libs/` from the local source checkout when needed, and reuse an already-populated `other_libs/qdp-lapack` tree without mutating `.git/modules`.
 - The helper script may patch the temporary QDPXX worktree for Apple clang compatibility by adding `<array>` to `include/qdp_map_obj_disk.h`.
 - The current Chroma tree also includes the `Serializable::serialID()` return-type compatibility fix in `lib/util/ferm/key_val_db.h` required by the tested QDPXX/filedb combination.
@@ -233,6 +238,10 @@ Legacy build context still matters:
 - `tests/two_level_glueball/gluecor_measure_launch.sh` writes CSV outputs under
   `gluecor_output/` inside the input directory unless `OUTPUT_ROOT` is
   overridden.
+- `tests/two_level_glueball/gluecor_measure_launch.sh` now defaults to the
+  `/private/tmp/chroma-build-codex-gluecor/chroma-localbinarydb` build tree,
+  falls back across common local build variants, and can still be overridden
+  with `CHROMA_BUILD` or `MEASURE_BIN`.
 - Additional local smoke artifacts now seen in the repo root include `child_temporal_zone_smoke_cfg_*.lime` and `child_temporal_zone_smoke_restart_*.xml` when running the child HMC smoke input from the checkout root.
 - Keep generated outputs and temporary workspace files out of commits unless the change is explicitly about the bootstrap or test workflow itself.
 

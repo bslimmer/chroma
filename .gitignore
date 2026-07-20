@@ -37,6 +37,8 @@ scripts/test_runners/cobalt_runner.sh
 scripts/test_runners/trivial_runner.sh
 tests/two_level_glueball/parent_files
 tests/two_level_glueball/child_hmc_runs
+tests/two_level_glueball/hmc_child*.out
+tests/two_level_glueball/__pycache__/
 build/
 **/.DS_Store
 .vscode/

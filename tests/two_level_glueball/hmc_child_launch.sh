@@ -34,8 +34,8 @@ BETA="${BETA:-5.7}"
 TAU0="${TAU0:-1.0}"
 NSTEPS="${NSTEPS:-20}"
 
-NPROD="${NPROD:-1000}"
-NTHISRUN="${NTHISRUN:-100}"
+NPROD="${NPROD:-10000}"
+NTHISRUN="${NTHISRUN:-1000}"
 SAVE_INTERVAL="${SAVE_INTERVAL:-10}"
 
 # Parent configs to process.
@@ -44,6 +44,8 @@ SAVE_INTERVAL="${SAVE_INTERVAL:-10}"
 PARENT_CONFIGS="${PARENT_CONFIGS:-hmc_parent_cfg_10.lime}"
 
 OUT_ROOT="${OUT_ROOT:-child_hmc_runs}"
+# Set to 0 to force the original sequential child-stream behavior.
+CHILD_HMC_PARALLEL="${CHILD_HMC_PARALLEL:-1}"
 
 mkdir -p "$OUT_ROOT"
 
@@ -188,6 +190,19 @@ write_child_hmc_xml() {
 XML
 }
 
+run_child_hmc() {
+  local child_label="$1"
+  local child_hmc_xml="$2"
+  local child_out_xml="$3"
+  local child_log_xml="$4"
+
+  echo "Running ${child_label} HMC with frozen boundary slices..."
+  "$HMC_BIN" \
+    -i "$child_hmc_xml" \
+    -o "$child_out_xml" \
+    -l "$child_log_xml"
+}
+
 # --------------------------------------------------------------------
 # Main loop
 # --------------------------------------------------------------------
@@ -217,6 +232,10 @@ for parent_cfg in $PARENT_CONFIGS; do
 
   child0_hmc_xml="$run_dir/hmc_child0.${tag}.ini.xml"
   child1_hmc_xml="$run_dir/hmc_child1.${tag}.ini.xml"
+  child0_out_xml="$run_dir/hmc_child0.${tag}.out.xml"
+  child1_out_xml="$run_dir/hmc_child1.${tag}.out.xml"
+  child0_log_xml="$run_dir/hmc_child0.${tag}.log.xml"
+  child1_log_xml="$run_dir/hmc_child1.${tag}.log.xml"
 
   child0_prefix="$run_dir/child0_hmc.${tag}"
   child1_prefix="$run_dir/child1_hmc.${tag}"
@@ -238,17 +257,26 @@ for parent_cfg in $PARENT_CONFIGS; do
   write_child_hmc_xml "$child0_cfg" "$child0_prefix" 23 "$child0_hmc_xml"
   write_child_hmc_xml "$child1_cfg" "$child1_prefix" 23 "$child1_hmc_xml"
 
-  echo "Running child0 HMC with frozen boundary slices..."
-  "$HMC_BIN" \
-    -i "$child0_hmc_xml" \
-    -o "$run_dir/hmc_child0.${tag}.out.xml" \
-    -l "$run_dir/hmc_child0.${tag}.log.xml"
+  if [ "$CHILD_HMC_PARALLEL" = "1" ]; then
+    echo "Launching child HMC streams in parallel..."
+    run_child_hmc "child0" "$child0_hmc_xml" "$child0_out_xml" "$child0_log_xml" &
+    child0_pid=$!
+    run_child_hmc "child1" "$child1_hmc_xml" "$child1_out_xml" "$child1_log_xml" &
+    child1_pid=$!
 
-  echo "Running child1 HMC with frozen boundary slices..."
-  "$HMC_BIN" \
-    -i "$child1_hmc_xml" \
-    -o "$run_dir/hmc_child1.${tag}.out.xml" \
-    -l "$run_dir/hmc_child1.${tag}.log.xml"
+    child0_status=0
+    child1_status=0
+    wait "$child0_pid" || child0_status=$?
+    wait "$child1_pid" || child1_status=$?
+
+    if [ "$child0_status" -ne 0 ] || [ "$child1_status" -ne 0 ]; then
+      echo "ERROR: child HMC failed (child0=${child0_status}, child1=${child1_status})"
+      exit 1
+    fi
+  else
+    run_child_hmc "child0" "$child0_hmc_xml" "$child0_out_xml" "$child0_log_xml"
+    run_child_hmc "child1" "$child1_hmc_xml" "$child1_out_xml" "$child1_log_xml"
+  fi
 
   echo "Done with $parent_cfg"
   echo
