@@ -65,6 +65,10 @@ namespace Chroma
 	std::string                 gauge_id;        /*!< Gauge field */
 	std::vector<std::string>    colorvec_files;  /*!< Eigenvectors in mod format */
 	std::string                 prop_op_file;    /*!< File name for propagator matrix elements */
+	std::string                 frozen_boundary_sidecar_file; /*!< Split sidecar describing frozen boundary geometry */
+	int                         frozen_boundary_child_id; /*!< Child id selecting the child-local geometry from the sidecar */
+	std::string                 factorized_intermediate_file; /*!< Separate metadata/scaffold output for L/R factorized tensors */
+	std::string                 factorized_cross_file; /*!< Separate metadata/scaffold output for assembled D_cross^{-1} */
       };
 
       Param_t           param;
