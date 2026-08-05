@@ -481,8 +481,11 @@ namespace Chroma {
 				return u_out;
 			}
 
+        inline std::vector<std::shared_ptr<LatticeFermion>>
+			returnNLatticeFermions(int n);
+
 		// Zero a LatticeFermion everywhere except on the listed time-slices.
-		LatticeFermion restrictToTimeslices(const LatticeFermion &psi,
+		std::vector<std::shared_ptr<LatticeFermion>> restrictToTimeslices(const std::vector<std::shared_ptr<LatticeFermion>> &psi,
 				const multi1d<int> &keep_tslices,
 				int t_dir) {
 			LatticeInteger t_coord = Layout::latticeCoordinate(t_dir);
@@ -492,7 +495,12 @@ namespace Chroma {
 				on_boundary |= (t_coord == keep_tslices[i]);
 
 			LatticeFermion zero_f = zero;
-			return where(on_boundary, psi, zero_f);
+
+            std::vector<std::shared_ptr<LatticeFermion>> r = returnNLatticeFermions(psi.size());
+            for(int i =0; i < psi.size(); i++){
+                *r[i] = where(on_boundary, *psi[i], zero_f);
+            }
+			return r;
 		}
 
 		/// Return a vector of LatticeFermion from the given SB::Tensor
@@ -842,7 +850,10 @@ namespace Chroma {
 								/// y = Dslash * x (*fLinOp)(x, y, PLUS);
 								auto y_boundary1 =returnNLatticeFermions(contract1.size());
 
-								(*fLinOp)(y_boundary1, contract1, PLUS);
+                                for(int i =0; i < contract1.size(); i++){
+                                    (*fLinOp)(*y_boundary1[i], *contract1[i], PLUS);
+                                }
+
 
 								// restrict solution to frozen regions
 								auto y_boundary1_rs = restrictToTimeslices(
@@ -852,19 +863,23 @@ namespace Chroma {
 
 								auto contract2 = returnNLatticeFermions(y_boundary1.size());
 
-								SB::doInversion(PP, contract2, y_boundary1_rs, max_rhs);
+								SB::doInversion(PP, contract2, Chroma::SB::ConstMultipleLatticeFermions (y_boundary1_rs.begin(),y_boundary1_rs.end()), max_rhs);
 
 								// y_boundary2 = D_{10} contract2
 								auto y_boundary2 = returnNLatticeFermions(y_boundary1.size());
-								(*fLinOp)(y_boundary2, contract2, PLUS);
+
+                                for(int i =0; i < contract2.size(); i++){
+                                    (*fLinOp)(*y_boundary2[i], *contract2[i], PLUS);
+                                }
 
 								// restrict solution again
-								auto y_boundary2 = restrictToTimeslices(
+								auto y_boundary2_rs = restrictToTimeslices(
 										y_boundary2, inner_source_boundaries, decay_dir);
 
 								// contract3 = D_{11}^-1 y_boundary2
 								auto contract3 = returnNLatticeFermions(y_boundary2.size());
-								SB::doInversion(PP, contract3, y_boundary2, max_rhs);
+								SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (y_boundary2_rs.begin(),y_boundary2_rs.end()), max_rhs);
+
 								SB::Tensor<Nd + 5, SB::Complex> quark_solns =
 									toSBTensor(contract3, first_tslice, num_tslices);
 								// t_sink * contract3
