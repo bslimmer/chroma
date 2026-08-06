@@ -1,0 +1,61 @@
+<?xml version="1.0"?>
+<!--
+  Mock sidecar for the 2x2x2x8 test lattice.
+  Derived by hand from makeGaugeSubdomainSplitPlan() in
+  lib/util/gauge/gauge_subdomain_split.cc for:
+    t_dir=3 (time), cut0=0, cut1=4, frozen_width=1, Lt=8
+
+  cut_left=0, cut_right=4
+  lenA = (4 - 0 - 1) mod 8 = 3   -> child0 extent = 2*1 + 3 = 5
+  lenB = (0 - 4 - 1) mod 8 = 3   -> child1 extent = 2*1 + 3 = 5
+
+  child0_local_to_global_t: [frozen@cut_left][active cut_left+1..][frozen@cut_right]
+    = [0, 1, 2, 3, 4]
+  child1_local_to_global_t: [frozen@cut_right][active cut_right+1..][frozen@cut_left]
+    = [4, 5, 6, 7, 0]
+
+  frozen_local_intervals (same shape for both children since both extents are 5):
+    [ {t_start:0, t_end:0}, {t_start:4, t_end:4} ]
+-->
+<GaugeSubdomainSplitInfo>
+  <Param>
+    <t_dir>3</t_dir>
+    <cut0>0</cut0>
+    <cut1>4</cut1>
+    <frozen_width>1</frozen_width>
+  </Param>
+
+  <Parent>
+    <nrow>2 2 2 8</nrow>
+  </Parent>
+
+  <Child0>
+    <nrow>2 2 2 5</nrow>
+    <local_to_global_t>0 1 2 3 4</local_to_global_t>
+    <frozen_local_intervals>
+      <elem>
+        <t_start>0</t_start>
+        <t_end>0</t_end>
+      </elem>
+      <elem>
+        <t_start>4</t_start>
+        <t_end>4</t_end>
+      </elem>
+    </frozen_local_intervals>
+  </Child0>
+
+  <Child1>
+    <nrow>2 2 2 5</nrow>
+    <local_to_global_t>4 5 6 7 0</local_to_global_t>
+    <frozen_local_intervals>
+      <elem>
+        <t_start>0</t_start>
+        <t_end>0</t_end>
+      </elem>
+      <elem>
+        <t_start>4</t_start>
+        <t_end>4</t_end>
+      </elem>
+    </frozen_local_intervals>
+  </Child1>
+</GaugeSubdomainSplitInfo>
