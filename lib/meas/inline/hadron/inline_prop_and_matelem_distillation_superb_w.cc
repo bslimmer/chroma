@@ -526,12 +526,12 @@ namespace Chroma {
 		/// \param t_source: first time-slice to return
 		/// \param num_tslices: number of timeslices to return
 
-		inline SB::Tensor<Nd + 5, SB::Complex>
+		inline SB::Tensor<Nd + 3, SB::Complex>
 			toSBTensor(const std::vector<std::shared_ptr<LatticeFermion>> &chi,
 					int t_source, int num_tslices) {
-				SB::Tensor<Nd + 5, SB::ComplexD> r(
+				SB::Tensor<Nd + 3, SB::ComplexD> r(
 						"cxyztXn",
-						SB::latticeSize<Nd + 5>("cxyztXn",
+						SB::latticeSize<Nd + 3>("cxyztXn",
 							{{'t', num_tslices}, {'n', chi.size()}}),
 						SB::OnDefaultDevice, SB::OnEveryone);
 				for (int col = 0; col < chi.size(); col++) {
@@ -842,7 +842,7 @@ namespace Chroma {
 								// return all timeslices for now
 								auto contract1_sb =
 									SB::doInversion(PP, source_colorvec, t_source, first_tslice, Lt,
-											{spin_source}, max_rhs, "cxyzXnSst");
+											{spin_source}, max_rhs, "cxyzXnSst").rename_dims({{'S','s'}, {'s', 'S'}});
 
 								auto contract1 = toLatticeFermions(contract1_sb, 0);
 
@@ -880,7 +880,7 @@ namespace Chroma {
 								auto contract3 = returnNLatticeFermions(y_boundary2.size());
 								SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (y_boundary2_rs.begin(),y_boundary2_rs.end()), max_rhs);
 
-								SB::Tensor<Nd + 5, SB::Complex> quark_solns =
+								auto quark_solns =
 									toSBTensor(contract3, first_tslice, num_tslices);
 								// t_sink * contract3
 
@@ -901,7 +901,7 @@ namespace Chroma {
 											!params.param.contract.use_superb_format ? SB::OnMaster
 											: SB::OnEveryone);
 									elems.contract(colorvec_snk, {{'n', 'N'}}, SB::Conjugate,
-											quark_solns, {}, SB::NotConjugate);
+											quark_solns, {{'s','S'}}, SB::NotConjugate);
 
 									snarss1.stop();
 									QDPIO::cout << "Time to contract for one spin source : "
