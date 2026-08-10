@@ -526,12 +526,12 @@ namespace Chroma {
 		/// \param t_source: first time-slice to return
 		/// \param num_tslices: number of timeslices to return
 
-		inline SB::Tensor<Nd + 3, SB::Complex>
+		inline SB::Tensor<Nd + 4, SB::Complex>
 			toSBTensor(const std::vector<std::shared_ptr<LatticeFermion>> &chi,
 					int t_source, int num_tslices) {
-				SB::Tensor<Nd + 3, SB::ComplexD> r(
-						"cxyztXn",
-						SB::latticeSize<Nd + 3>("cxyztXn",
+				SB::Tensor<Nd + 4, SB::ComplexD> r(
+						"cxyztXns",
+						SB::latticeSize<Nd + 4>("cxyztXns",
 							{{'t', num_tslices}, {'n', chi.size()}}),
 						SB::OnDefaultDevice, SB::OnEveryone);
 				for (int col = 0; col < chi.size(); col++) {
@@ -774,16 +774,29 @@ namespace Chroma {
 						loadFactorizedPropGeometry(params.named_obj, decay_dir);
 					// Zero timeslices where the active zone reaches the boundary
 					multi1d<LatticeColorMatrix> u_sep = u;
+
+					//Assuming 2 regions:
+					//u_sep = zeroTemporalLinksOnSlice(u_sep,SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_start - 1, Lt));
+					//std::cout << "Freezing t links on slice: " << SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_start - 1, Lt) << std::endl;
+					//u_sep = zeroTemporalLinksOnSlice(u_sep,SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_end, Lt));
+					//std::cout << "Freezing t links on slice: " << SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_end, Lt) << std::endl;
+					
 					for (int i = 0; i < geometry.plan.child0_frozen_local_intervals.size(); i++) {
 						// TODO:Handling for end of lattice below?
 						u_sep = zeroTemporalLinksOnSlice(
-								u_sep, geometry.plan.child0_frozen_local_intervals[i].t_start - 1);
+								u_sep,SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[i].t_start - 1, Lt));
 						u_sep = zeroTemporalLinksOnSlice(
 								u_sep, geometry.plan.child0_frozen_local_intervals[i].t_end);
+						//std::cout << "Freezing t links on slice: " << SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[i].t_start - 1, Lt)  << std::endl;
 					}
+
+					//SB::asTensorView(u_sep[3]).print("u_sep");
+					//Printing without even/odd ordering
+					SB::detail::toNaturalOrdering(SB::asTensorView(u_sep[3]).toComplex()).print("u_sep"); 
 					// Compute prop based on open boundary conditions
 					SB::ChimeraSolver PP{params.param.prop.fermact,
 						params.param.prop.invParam, u_sep};
+
 
 
 					// Build Dirac operator for boundary crossing
@@ -799,6 +812,7 @@ namespace Chroma {
 					auto state(S_f->createState(u));
 					LinearOperator<LatticeFermion> *fLinOp = S_f->genLinOp(state);
 
+
 					// Loop over time sources
 					for (int tt = 0; tt < t_sources.size(); ++tt) {
 						int t_source = t_sources[tt]; // This is the actual time-slice.
@@ -807,16 +821,16 @@ namespace Chroma {
 						// ends of source subdomain
 						// TODO: Needs case handling
 						multi1d<int> inner_source_boundaries(4);
-						inner_source_boundaries[0] = 0;
+						inner_source_boundaries[0] = SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_end, Lt);
 						inner_source_boundaries[1] =
-							geometry.plan.child0_frozen_local_intervals[1].t_start - 1;
+							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_start, Lt);
 						inner_source_boundaries[2] =
-							geometry.plan.child1_frozen_local_intervals[0].t_end;
+							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_end, Lt);
 						inner_source_boundaries[3] =
-							geometry.plan.child1_frozen_local_intervals[1].t_start - 1;
+							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_start, Lt);
 
-						int num_tslices =
-							inner_source_boundaries[1] - inner_source_boundaries[0];
+						//Simple case
+						int num_tslices = Lt;
 
 						//For now for simplicity
 						int first_tslice = 0;
@@ -843,8 +857,10 @@ namespace Chroma {
 								auto contract1_sb =
 									SB::doInversion(PP, source_colorvec, t_source, first_tslice, Lt,
 											{spin_source}, max_rhs, "cxyzXnSst").rename_dims({{'S','s'}, {'s', 'S'}});
+								
 
 								auto contract1 = toLatticeFermions(contract1_sb, 0);
+								//SB::detail::toNaturalOrdering(SB::asTensorView(*contract1[0]).toComplex()).print("contract1");
 
 								// Multiply result with boundary Dirac matrix D_{01}
 								/// y = Dslash * x (*fLinOp)(x, y, PLUS);
@@ -854,31 +870,46 @@ namespace Chroma {
                                     (*fLinOp)(*y_boundary1[i], *contract1[i], PLUS);
                                 }
 
+				SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary1[0]).toComplex()).print("y_boundary1");
+
 
 								// restrict solution to frozen regions
 								auto y_boundary1_rs = restrictToTimeslices(
 										y_boundary1, inner_source_boundaries, decay_dir);
 
+								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary1_rs[0]).toComplex()).print("y_boundary1_rs");
 								// contract2 = D_{00}^-1 y_boundary1
 
 								auto contract2 = returnNLatticeFermions(y_boundary1.size());
 
 								SB::doInversion(PP, contract2, Chroma::SB::ConstMultipleLatticeFermions (y_boundary1_rs.begin(),y_boundary1_rs.end()), max_rhs);
 
+								SB::detail::toNaturalOrdering(SB::asTensorView(*contract2[0]).toComplex()).print("contract2");
 								// y_boundary2 = D_{10} contract2
 								auto y_boundary2 = returnNLatticeFermions(y_boundary1.size());
 
                                 for(int i =0; i < contract2.size(); i++){
                                     (*fLinOp)(*y_boundary2[i], *contract2[i], PLUS);
                                 }
+				SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2[0]).toComplex()).print("y_boundary2");
 
 								// restrict solution again
-								auto y_boundary2_rs = restrictToTimeslices(
-										y_boundary2, inner_source_boundaries, decay_dir);
+								// Needs case handling
+								multi1d<int> sink_active_region(Lt - 1 -geometry.plan.child0_frozen_local_intervals[1].t_end);
+								for(int i=0; i < sink_active_region.size(); i++){
+									sink_active_region[i] = geometry.plan.child0_frozen_local_intervals[1].t_end + 1+i;}
+								auto y_boundary2_rs = restrictToTimeslices(y_boundary2, sink_active_region, decay_dir);
+								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2_rs[0]).toComplex()).print("y_boundary2_rs");
 
 								// contract3 = D_{11}^-1 y_boundary2
 								auto contract3 = returnNLatticeFermions(y_boundary2.size());
 								SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (y_boundary2_rs.begin(),y_boundary2_rs.end()), max_rhs);
+
+								SB::detail::toNaturalOrdering(SB::asTensorView(*contract3[0]).toComplex()).print("contract3");
+
+								//auto contract3rs = restrictToTimeslices(contract3, sink_active_region, decay_dir);
+
+								//SB::detail::toNaturalOrdering(SB::asTensorView(*contract3rs[0]).toComplex()).print("contract3rs");
 
 								auto quark_solns =
 									toSBTensor(contract3, first_tslice, num_tslices);
@@ -901,7 +932,8 @@ namespace Chroma {
 											!params.param.contract.use_superb_format ? SB::OnMaster
 											: SB::OnEveryone);
 									elems.contract(colorvec_snk, {{'n', 'N'}}, SB::Conjugate,
-											quark_solns, {{'s','S'}}, SB::NotConjugate);
+											quark_solns.append_dimension('S'), {{'s', 'S'},{'S', 's'}}, SB::NotConjugate);
+
 
 									snarss1.stop();
 									QDPIO::cout << "Time to contract for one spin source : "
