@@ -84,6 +84,11 @@ namespace Chroma {
 			if (inputtop.count("factorized_cross_file") == 1) {
 				read(inputtop, "factorized_cross_file", input.factorized_cross_file);
 			}
+
+			input.num_intermediate_projectors = -1;
+			if (inputtop.count("num_intermediate_projectors") == 1){
+				read(inputtop, "num_intermediate_projectors", input.num_intermediate_projectors);
+			}
 		}
 
 		//! Propagator output
@@ -108,6 +113,10 @@ namespace Chroma {
 			if (!input.factorized_cross_file.empty()) {
 				write(xml, "factorized_cross_file", input.factorized_cross_file);
 			}
+			if (input.num_intermediate_projectors >= 0){
+				write(xml, "num_intermediate_projectors", input.num_intermediate_projectors);
+			}
+
 
 			pop(xml);
 		}
@@ -775,12 +784,7 @@ namespace Chroma {
 					// Zero timeslices where the active zone reaches the boundary
 					multi1d<LatticeColorMatrix> u_sep = u;
 
-					//Assuming 2 regions:
-					//u_sep = zeroTemporalLinksOnSlice(u_sep,SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_start - 1, Lt));
-					//std::cout << "Freezing t links on slice: " << SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_start - 1, Lt) << std::endl;
-					//u_sep = zeroTemporalLinksOnSlice(u_sep,SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_end, Lt));
-					//std::cout << "Freezing t links on slice: " << SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_end, Lt) << std::endl;
-					
+					//Assuming 2 regions:					
 					for (int i = 0; i < geometry.plan.child0_frozen_local_intervals.size(); i++) {
 						// TODO:Handling for end of lattice below?
 						u_sep = zeroTemporalLinksOnSlice(
@@ -800,9 +804,6 @@ namespace Chroma {
 
 
 					// Build Dirac operator for boundary crossing
-					// typedef LatticeFermion T;                    // fermion field type
-					// typedef multi1d<LatticeColorMatrix> P;       // "P" - conjugate momenta type
-					// typedef multi1d<LatticeColorMatrix> Q;       // "Q" - gauge field type
 					std::istringstream xml_s(params.param.prop.fermact.xml);
 					XMLReader fermacttop(xml_s);
 					auto S_f(
@@ -843,6 +844,11 @@ namespace Chroma {
 									num_vecs, "cxyzXnt", SB::Coor<3>{{}},
 									dev);
 
+						SB::Tensor<Nd + 3, SB::Complex> colorvec_proj =
+							SB::getColorvecs<SB::Complex>(colorvecsSto, u, decay_dir, 0, Lt,
+									params.named_obj.num_intermediate_projectors, "cxyzXnt", SB::Coor<3>{{}},
+									dev);
+
 						// Loop over phasings/spin indexes
 						for (const auto &it : phasing_pairs) {
 							int phasing_src_idx = it.first;
@@ -870,7 +876,7 @@ namespace Chroma {
                                     (*fLinOp)(*y_boundary1[i], *contract1[i], PLUS);
                                 }
 
-				SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary1[0]).toComplex()).print("y_boundary1");
+								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary1[0]).toComplex()).print("y_boundary1");
 
 
 								// restrict solution to frozen regions
@@ -878,20 +884,22 @@ namespace Chroma {
 										y_boundary1, inner_source_boundaries, decay_dir);
 
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary1_rs[0]).toComplex()).print("y_boundary1_rs");
+								
 								// contract2 = D_{00}^-1 y_boundary1
-
 								auto contract2 = returnNLatticeFermions(y_boundary1.size());
 
 								SB::doInversion(PP, contract2, Chroma::SB::ConstMultipleLatticeFermions (y_boundary1_rs.begin(),y_boundary1_rs.end()), max_rhs);
 
 								SB::detail::toNaturalOrdering(SB::asTensorView(*contract2[0]).toComplex()).print("contract2");
+								
 								// y_boundary2 = D_{10} contract2
 								auto y_boundary2 = returnNLatticeFermions(y_boundary1.size());
 
                                 for(int i =0; i < contract2.size(); i++){
                                     (*fLinOp)(*y_boundary2[i], *contract2[i], PLUS);
                                 }
-				SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2[0]).toComplex()).print("y_boundary2");
+								
+								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2[0]).toComplex()).print("y_boundary2");
 
 								// restrict solution again
 								// Needs case handling
@@ -901,15 +909,33 @@ namespace Chroma {
 								auto y_boundary2_rs = restrictToTimeslices(y_boundary2, sink_active_region, decay_dir);
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2_rs[0]).toComplex()).print("y_boundary2_rs");
 
+								//Contract with set of projection vectors
+								// L(t) = y_boundary2_rs*phi_x,m
+								auto projected_fields = returnNLatticeFermions(y_boundary2_rs.size());
+								for(int i=0; i < y_boundary2_rs.size(); i++){
+									auto yb2rs_sb = toSBTensor(Chroma::SB::MultipleLatticeFermions (y_boundary2_rs.begin()+i, y_boundary2_rs.begin()+i+1), sink_active_region[0], 1);
+									auto proj_colorvec0 = colorvec_proj.kvslice_from_size({{'t', sink_active_region[0]}}, {{'t', 1}});
+									auto inner_proj0 = SB::contract<3>(proj_colorvec0.conj().rename_dims({{'n', 'm'}}), yb2rs_sb, "cxyzXt");
+									auto outer_proj0 = SB::contract<8>(proj_colorvec0.rename_dims({{'n', 'm'}}), inner_proj0, "m");
+									outer_proj0.copyTo(SB::asTensorView(*projected_fields[i]).kvslice_from_size({{'t', sink_active_region[0]}}, {{'t', 1}}));
+
+									yb2rs_sb = toSBTensor(Chroma::SB::MultipleLatticeFermions (y_boundary2_rs.begin()+i, y_boundary2_rs.begin()+i+1),
+									 sink_active_region[sink_active_region.size()-1], 1);
+									auto proj_colorvec1 = colorvec_proj.kvslice_from_size({{'t', sink_active_region[sink_active_region.size()-1]}}, {{'t', 1}});
+									auto inner_proj1 = SB::contract<3>(proj_colorvec1.conj().rename_dims({{'n', 'm'}}), yb2rs_sb, "cxyzXt");
+									auto outer_proj1 = SB::contract<8>(proj_colorvec1.rename_dims({{'n', 'm'}}), inner_proj1, "m");
+									outer_proj1.copyTo(SB::asTensorView(*projected_fields[i]).kvslice_from_size({{'t', sink_active_region[sink_active_region.size()-1]}}, {{'t', 1}}));
+
+								}
+
 								// contract3 = D_{11}^-1 y_boundary2
 								auto contract3 = returnNLatticeFermions(y_boundary2.size());
-								SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (y_boundary2_rs.begin(),y_boundary2_rs.end()), max_rhs);
+								//Below is computed w/o intermediary projector
+								// SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (y_boundary2_rs.begin(),y_boundary2_rs.end()), max_rhs);
+								SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (projected_fields.begin(),projected_fields.end()), max_rhs);
 
 								SB::detail::toNaturalOrdering(SB::asTensorView(*contract3[0]).toComplex()).print("contract3");
 
-								//auto contract3rs = restrictToTimeslices(contract3, sink_active_region, decay_dir);
-
-								//SB::detail::toNaturalOrdering(SB::asTensorView(*contract3rs[0]).toComplex()).print("contract3rs");
 
 								auto quark_solns =
 									toSBTensor(contract3, first_tslice, num_tslices);

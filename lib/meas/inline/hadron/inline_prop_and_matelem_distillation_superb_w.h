@@ -69,6 +69,7 @@ namespace Chroma
 	int                         frozen_boundary_child_id; /*!< Child id selecting the child-local geometry from the sidecar */
 	std::string                 factorized_intermediate_file; /*!< Separate metadata/scaffold output for L/R factorized tensors */
 	std::string                 factorized_cross_file; /*!< Separate metadata/scaffold output for assembled D_cross^{-1} */
+  int                         num_intermediate_projectors; /*Number of distillation projectors used for factorized tensors*/
       };
 
       Param_t           param;
