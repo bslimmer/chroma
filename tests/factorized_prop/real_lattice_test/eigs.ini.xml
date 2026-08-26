@@ -1,0 +1,46 @@
+<?xml version="1.0"?>
+<chroma>
+<!--Generating colorvecs for prop test-->	
+<Param>
+  <InlineMeasurements>
+
+    <elem>
+      <Name>CREATE_COLORVECS_SUPERB</Name>
+      <Frequency>1</Frequency>
+      <Param>
+        <num_vecs>128</num_vecs>
+	<decay_dir>3</decay_dir>
+	<write_fingerprint>true</write_fingerprint>
+        <LinkSmearing>
+          <LinkSmearingType>STOUT_SMEAR</LinkSmearingType>
+          <link_smear_fact>0.08</link_smear_fact>
+          <link_smear_num>10</link_smear_num>
+          <no_smear_dir>3</no_smear_dir>
+        </LinkSmearing>
+      </Param>
+      <NamedObject>
+	      <gauge_id>default_gauge_field</gauge_id>
+	      <colorvec_out>eigs.sdb</colorvec_out>
+      </NamedObject>
+    </elem>
+
+
+
+  </InlineMeasurements>
+  <nrow>32 32 32 64</nrow>
+</Param>
+
+<RNG>
+  <Seed>
+    <elem>11</elem>
+    <elem>11</elem>
+    <elem>11</elem>
+    <elem>0</elem>
+  </Seed>
+</RNG>
+
+<Cfg>
+  <cfg_type>SCIDAC</cfg_type>
+  <cfg_file>cl21_32_64_b6p3_m0p2350_m0p2050_cfg_2160.lime</cfg_file>
+</Cfg>
+</chroma>
