@@ -876,6 +876,8 @@ namespace Chroma {
                                     (*fLinOp)(*y_boundary1[i], *contract1[i], PLUS);
                                 }
 
+								contract1.clear();
+
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary1[0]).toComplex()).print("y_boundary1");
 
 
@@ -883,21 +885,28 @@ namespace Chroma {
 								auto y_boundary1_rs = restrictToTimeslices(
 										y_boundary1, inner_source_boundaries, decay_dir);
 
+								y_boundary1.clear();
+
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary1_rs[0]).toComplex()).print("y_boundary1_rs");
 								
 								// contract2 = D_{00}^-1 y_boundary1
-								auto contract2 = returnNLatticeFermions(y_boundary1.size());
+								auto contract2 = returnNLatticeFermions(y_boundary1_rs.size());
+
 
 								SB::doInversion(PP, contract2, Chroma::SB::ConstMultipleLatticeFermions (y_boundary1_rs.begin(),y_boundary1_rs.end()), max_rhs);
+
+								y_boundary1_rs.clear();
 
 								SB::detail::toNaturalOrdering(SB::asTensorView(*contract2[0]).toComplex()).print("contract2");
 								
 								// y_boundary2 = D_{10} contract2
-								auto y_boundary2 = returnNLatticeFermions(y_boundary1.size());
+								auto y_boundary2 = returnNLatticeFermions(contract2.size());
 
                                 for(int i =0; i < contract2.size(); i++){
                                     (*fLinOp)(*y_boundary2[i], *contract2[i], PLUS);
                                 }
+
+								contract2.clear();
 								
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2[0]).toComplex()).print("y_boundary2");
 
@@ -908,6 +917,8 @@ namespace Chroma {
 									sink_active_region[i] = geometry.plan.child0_frozen_local_intervals[1].t_end + 1+i;}
 								auto y_boundary2_rs = restrictToTimeslices(y_boundary2, sink_active_region, decay_dir);
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2_rs[0]).toComplex()).print("y_boundary2_rs");
+
+								y_boundary2.clear();
 
 								//Contract with set of projection vectors
 								// L(t) = y_boundary2_rs*phi_x,m
@@ -928,13 +939,22 @@ namespace Chroma {
 
 								}
 
+								SB::detail::toNaturalOrdering(SB::asTensorView(*projected_fields[0]).toComplex()).print("projected_fields");								
+
 								// contract3 = D_{11}^-1 y_boundary2
-								auto contract3 = returnNLatticeFermions(y_boundary2.size());
+								auto contract3 = returnNLatticeFermions(y_boundary2_rs.size());
+								//2nd copy of contraction for debugging between 'exact' and reduced
+								//auto contract3_db = returnNLatticeFermions(y_boundary2.size());
 								//Below is computed w/o intermediary projector
-								// SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (y_boundary2_rs.begin(),y_boundary2_rs.end()), max_rhs);
+								//SB::doInversion(PP, contract3_db, Chroma::SB::ConstMultipleLatticeFermions (y_boundary2_rs.begin(),y_boundary2_rs.end()), max_rhs);
+
 								SB::doInversion(PP, contract3, Chroma::SB::ConstMultipleLatticeFermions (projected_fields.begin(),projected_fields.end()), max_rhs);
 
 								SB::detail::toNaturalOrdering(SB::asTensorView(*contract3[0]).toComplex()).print("contract3");
+
+								projected_fields.clear();
+
+								//SB::detail::toNaturalOrdering(SB::asTensorView(*contract3_db[0]).toComplex()).print("contract3_db");
 
 
 								auto quark_solns =
