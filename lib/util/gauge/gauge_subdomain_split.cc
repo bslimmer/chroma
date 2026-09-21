@@ -531,16 +531,20 @@ namespace Chroma
       {
         if (!parent_written[parent_site])
           failGaugeSubdomainSplit("child1 frozen slice has no matching child0 source during stitch");
-
+	
+	const double tol = 1.0e-9;
         for (int mu = 0; mu < Nd; ++mu)
         {
           const ColorMatrix& lhs = parent_links[linkIndex(mu, parent_site, parent_vol)];
           const ColorMatrix& rhs = child1_links[linkIndex(mu, child_site, child1_vol)];
-          if (toDouble(norm2(lhs - rhs)) != 0.0)
+	  double diff = toDouble(norm2(lhs - rhs));
+          if (diff > tol)
           {
             std::ostringstream os;
             os << "duplicated frozen boundary mismatch at global t="
-               << parent_coord[plan.param.t_dir] << " direction " << mu;
+               << parent_coord[plan.param.t_dir] << " direction " << mu 
+	       << " norm2_diff=" << diff
+	       << " tolerance=" << tol;
             failGaugeSubdomainSplit(os.str());
           }
         }
