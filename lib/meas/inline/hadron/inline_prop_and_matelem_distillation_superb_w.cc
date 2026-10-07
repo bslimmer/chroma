@@ -89,6 +89,16 @@ namespace Chroma {
 			if (inputtop.count("num_intermediate_projectors") == 1){
 				read(inputtop, "num_intermediate_projectors", input.num_intermediate_projectors);
 			}
+
+			input.intermediate_projector_phase.resize(Nd - 1);
+			for (int i = 0; i < Nd - 1; ++i) input.intermediate_projector_phase[i] = 0;
+			if (inputtop.count("intermediate_projector_phase") == 1) {
+				read(inputtop, "intermediate_projector_phase", input.intermediate_projector_phase);
+				if (input.intermediate_projector_phase.size() != Nd - 1) {
+					throw std::runtime_error(std::string("intermediate_projector_phase should have ") +
+							std::to_string(Nd - 1) + " components");
+				}			
+			}
 		}
 
 		//! Propagator output
@@ -117,6 +127,7 @@ namespace Chroma {
 				write(xml, "num_intermediate_projectors", input.num_intermediate_projectors);
 			}
 
+			write(xml, "intermediate_projector_phase", input.intermediate_projector_phase);
 
 			pop(xml);
 		}
@@ -846,7 +857,7 @@ namespace Chroma {
 
 						SB::Tensor<Nd + 3, SB::Complex> colorvec_proj =
 							SB::getColorvecs<SB::Complex>(colorvecsSto, u, decay_dir, 0, Lt,
-									params.named_obj.num_intermediate_projectors, "cxyzXnt", SB::Coor<3>{{}},
+									params.named_obj.num_intermediate_projectors, "cxyzXnt", SB::toCoor(params.named_obj.intermediate_projector_phase),
 									dev);
 
 						// Loop over phasings/spin indexes
