@@ -386,6 +386,14 @@ namespace Chroma {
 					throw std::runtime_error(os.str());
 				}
 
+				//Check that the frozen width is at least 3 to allow space for measurement
+				if (plan.param.frozen_width < 3){
+					std::ostringstream os;
+					os << "frozen interval size " << plan.param.frozen_width 
+						<<" insufficient; frozen intervals must be at least 3 timeslices";
+					throw std::runtime_error(os.str());
+				}
+
 				geometry.enabled = true;
 				geometry.sidecar_file = named_obj.frozen_boundary_sidecar_file;
 				geometry.child_id = named_obj.frozen_boundary_child_id;
@@ -621,7 +629,6 @@ namespace Chroma {
 			}
 
 			// Test and grab a reference to the gauge field
-			// TODO: Stitch child configs together for full geometry
 			multi1d<LatticeColorMatrix> u;
 			XMLBufferWriter gauge_xml;
 			try {
@@ -795,13 +802,16 @@ namespace Chroma {
 					// Zero timeslices where the active zone reaches the boundary
 					multi1d<LatticeColorMatrix> u_sep = u;
 
-					//Assuming 2 regions:					
+					//Assuming 2 regions:
+					//Moving measurement D00 one slice in from frozen region
+					//Eliminates clover term crossing into active regions
+					//Note this assumes a boundary width of at least 3; enforced with error handling					
 					for (int i = 0; i < geometry.plan.child0_frozen_local_intervals.size(); i++) {
 						// TODO:Handling for end of lattice below?
 						u_sep = zeroTemporalLinksOnSlice(
-								u_sep,SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[i].t_start - 1, Lt));
+								u_sep,SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[i].t_start, Lt));
 						u_sep = zeroTemporalLinksOnSlice(
-								u_sep, geometry.plan.child0_frozen_local_intervals[i].t_end);
+								u_sep, geometry.plan.child0_frozen_local_intervals[i].t_end-1);
 						//std::cout << "Freezing t links on slice: " << SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[i].t_start - 1, Lt)  << std::endl;
 					}
 
@@ -831,15 +841,16 @@ namespace Chroma {
 						QDPIO::cout << "t_source = " << t_source << std::endl;
 
 						// ends of source subdomain
+						// Measuring one timeslice in from frozen boundary
 						// TODO: Needs case handling
 						multi1d<int> inner_source_boundaries(4);
-						inner_source_boundaries[0] = SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_end, Lt);
+						inner_source_boundaries[0] = SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_end-1, Lt);
 						inner_source_boundaries[1] =
-							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_start, Lt);
+							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[0].t_start+1, Lt);
 						inner_source_boundaries[2] =
-							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_end, Lt);
+							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_end-1, Lt);
 						inner_source_boundaries[3] =
-							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_start, Lt);
+							SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[1].t_start+1, Lt);
 
 						//Simple case
 						int num_tslices = Lt;
@@ -922,10 +933,12 @@ namespace Chroma {
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2[0]).toComplex()).print("y_boundary2");
 
 								// restrict solution again
+								// Include frozen timeslices internal to sink region
 								// Needs case handling
-								multi1d<int> sink_active_region(Lt - 1 -geometry.plan.child0_frozen_local_intervals[1].t_end);
-								for(int i=0; i < sink_active_region.size(); i++){
-									sink_active_region[i] = geometry.plan.child0_frozen_local_intervals[1].t_end + 1+i;}
+								multi1d<int> sink_active_region(Lt + 1 -geometry.plan.child0_frozen_local_intervals[1].t_end);
+								for(int i=0; i < sink_active_region.size()-1; i++){
+									sink_active_region[i] = geometry.plan.child0_frozen_local_intervals[1].t_end +i;}
+								sink_active_region[sink_active_region.size()-1] = 0;
 								auto y_boundary2_rs = restrictToTimeslices(y_boundary2, sink_active_region, decay_dir);
 								SB::detail::toNaturalOrdering(SB::asTensorView(*y_boundary2_rs[0]).toComplex()).print("y_boundary2_rs");
 
