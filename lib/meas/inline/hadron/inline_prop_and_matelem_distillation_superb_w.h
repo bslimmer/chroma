@@ -71,6 +71,7 @@ namespace Chroma
 	std::string                 factorized_cross_file; /*!< Separate metadata/scaffold output for assembled D_cross^{-1} */
   int                         num_intermediate_projectors; /*Number of distillation projectors used for factorized tensors*/
   multi1d<int>                intermediate_projector_phase; /*Optional 3 integer phasing for the boundary projector colorvecs*/
+  bool                        overlapping_factorization; /*Use the overlapping-domain (Giusti) factorization; see specs/hier/factorized_prop_overlapping.md*/
       };
 
       Param_t           param;

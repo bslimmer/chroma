@@ -22,7 +22,7 @@ This file is the working handoff for humans and coding agents contributing to th
 
 ## Current Workstream
 
-The current feature work has two closely related threads:
+The current feature work has four closely related threads:
 
 1. A new force-suppression gauge boundary condition:
    - public XML/factory name: `TEMPORAL_ZONE_GAUGEBC`
@@ -132,6 +132,47 @@ The current feature work has two closely related threads:
    - first-version assumption: user-facing split/stitch tools write QIO outputs and persist split metadata in a sidecar XML file
    - current validation assumption: child gauge-only HMC must freeze both force and refreshed momentum on the duplicated boundary intervals
 
+3. A factorized distillation propagator-writing workflow built on split child
+   HMC infrastructure:
+   - draft spec outline: `specs/hier/factorized_prop.md`
+   - intended first measurement surface:
+     `lib/meas/inline/hadron/inline_prop_and_matelem_distillation_superb_w.cc`
+   - current draft goal: define the frozen-region / unfrozen-region block
+     decomposition, the exact identity-inserted cross-subdomain propagator
+     writing with left/right tensors and the assembled cross-subdomain
+     propagator, the frozen-boundary XML input path, and the child-local
+     output objects before any meson two-point or two-level estimator spec is
+     added
+   - current first-version decisions:
+     `Gamma*` is the union of both frozen temporal boundary blocks, frozen
+     boundary XML enters through `NamedObject`, and the assembled
+     `D_cross^{-1}` output is written separately from the `L` / `R`
+     intermediates
+   - overlapping-domain (Ce/Giusti/Schaefer) variant of the parent-lattice
+     test path: `specs/hier/factorized_prop_overlapping.md`, enabled with
+     `NamedObject/overlapping_factorization = true`; projector on the first
+     internal frozen slice from the source side (`c1+1`, `fw-2`), two cut-field
+     solvers (`u_src`, `u_snk`); `num_intermediate_projectors <= 0` means no
+     projector in this mode
+
+4. Child-local factorized baryon tensors (LEFT sink bracket / RIGHT source
+   bracket of the factorized baryon two-point function):
+   - spec: `specs/hier/factorized_baryon_tensors.md`
+   - measurement `FACTORIZED_BARYON_TENSOR_DISTILLATION_SUPERB`:
+     `lib/meas/inline/hadron/inline_factorized_baryon_tensor_distillation_superb_w.{h,cc}`
+     (registered in `inline_hadron_aggregate.cc` under `BUILD_SB`)
+   - shared helpers (geometry, cut links, parent temporal phase, parent-file
+     projector reader), also used by the prototype:
+     `lib/util/ferm/factorized_distillation.{h,cc}`
+   - projectors live on frozen slices adjacent to the source child's active
+     region and are read from one parent-lattice colorvec file
+     (`projector_colorvec_files`, MOD or fingerprint s3t); both sides are
+     solved from the projector sources; all XML times are parent-global
+   - the fermion state must not smear in time (`orthog_dir` = decay dir)
+   - checker: `mainprogs/tests/t_factorized_baryon_tensor.cc`
+   - end-to-end validation: `tests/factorized_baryon_tensor/run_validation.sh`
+     (outputs under `cfgs/factorized_baryon_tensor/`)
+
 Important behavior note:
 
 - `TEMPORAL_ZONE_GAUGEBC` currently uses `GaugeBC::zero(P&)` to suppress gauge-like force/update fields on the selected time intervals only.
@@ -169,10 +210,21 @@ Notes about the current recipe:
 
 - The source path contains spaces, so the bootstrap script builds through a no-space alias at `/private/tmp/chroma-ws`.
 - The tested QDPXX branch for this checkout is `origin/eloy/localbinarydb`.
+- Chroma's CMake build requires `cmake 3.17+`; older cluster modules such as
+  `3.13.x` should be treated as unsupported for this branch.
+- Older Linux cluster GCC defaults may compile QIO in pre-C99 mode; the local
+  QDPXX helper now defaults `QDPXX_CFLAGS` to `-O2 -std=gnu99` so
+  `other_libs/qio/lib/dml/DML_utils.c` builds cleanly.
 - `./scripts/bootstrap_local_qdpxx_build.sh build-tests` now also builds
   `mainprogs/main/gluecor_measure` in addition to the focused test and smoke
   targets.
 - If that ref already exists locally and network fetches are unavailable, set `QDPXX_SKIP_FETCH=1`; the bootstrap script will reuse the local ref, repopulate QDPXX `other_libs/` from the local source checkout when needed, and reuse an already-populated `other_libs/qdp-lapack` tree without mutating `.git/modules`.
+- If a fork-based clone resolves `other_libs/qdp-lapack` against the wrong
+  GitHub namespace, either add an `upstream` remote for the canonical Chroma
+  repo or set `QDP_LAPACK_URL` explicitly before running the bootstrap helper.
+- The bootstrap helper now falls back to `cd ... && git ...`, a plain local
+  QDPXX clone, and `git checkout -B` when a cluster Git is too old for
+  `git -C`, `git worktree`, or `git switch`.
 - The helper script may patch the temporary QDPXX worktree for Apple clang compatibility by adding `<array>` to `include/qdp_map_obj_disk.h`.
 - The current Chroma tree also includes the `Serializable::serialID()` return-type compatibility fix in `lib/util/ferm/key_val_db.h` required by the tested QDPXX/filedb combination.
 - Detailed manual commands and expected outputs are documented in `docs/build_local_qdpxx.md`.
@@ -206,6 +258,16 @@ Current verification targets:
 - `t_hmc_momentum_bc_autodiscovery` should exit successfully.
 - `t_leapfrog` should accept `TEMPORAL_ZONE_GAUGEBC` and complete using `tests/t_leapfrog/t_leapfrog.temporal_zone_gaugebc.ini.xml`.
 - `hmc` should complete a one-update child-sized gauge-only smoke run using `tests/gauge_subdomain_split/hmc_temporal_zone_child_smoke.ini.xml`.
+- `tests/factorized_baryon_tensor/run_validation.sh` (needs a superbblas +
+  PRIMME build with `chroma`, `gauge_subdomain_split` and
+  `t_factorized_baryon_tensor`; set `CHROMA_BUILD`) should end with "All
+  factorized baryon tensor validation steps passed", for both
+  `FROZEN_WIDTH=1` and `FROZEN_WIDTH=2`.
+- Known QDPXX issue: with the tested `localbinarydb` QDPXX branch, writing
+  FILEDB (MOD) colorvec files (`CREATE_COLORVECS_SUPERB` with
+  `write_fingerprint = false`) aborts with SIGFPE in
+  `MapObjectDisk::convertToPrivate` where `std::streamoff` is 64 bit; the
+  validation script therefore only writes s3t colorvec files.
 
 Legacy build context still matters:
 
