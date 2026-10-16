@@ -350,6 +350,7 @@ nobase_include_HEADERS = \
 	util/gauge/gauge.h \
 	util/gauge/gauge_startup.h \
 	util/gauge/gauge_subdomain_split.h \
+	util/ferm/factorized_distillation.h \
 	util/gauge/gauge_init.h \
 	util/gauge/gauge_init_factory.h \
 	util/gauge/gauge_init_aggregate.h \
@@ -1368,6 +1369,7 @@ libchroma_a_SOURCES = \
 	util/gauge/expm12.cc util/gauge/expmat.cc util/gauge/expsu3.cc \
 	util/gauge/gauge_startup.cc util/gauge/eesu2.cc \
 	util/gauge/gauge_subdomain_split.cc \
+	util/ferm/factorized_distillation.cc \
 	util/gauge/gauge_init_aggregate.cc \
 	util/gauge/milc_gauge_init.cc \
 	util/gauge/nersc_gauge_init.cc \
