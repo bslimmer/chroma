@@ -43,53 +43,54 @@ A_src = [fw, c1-1]        source active region (t_source must lie here)
 A_snk = [c1+fw, Lt-1]     sink active region
 ```
 
-### Cut ("hop") on the first internal slice of each frozen interval
+### Symmetric layout (revised 2026-10-21)
 
-The projector sits on the frozen slice one in from the source-side edge, independent of
-fw. The hop goes from there one slice further toward the sink. `w2` is the slice on the
-source side of the hop (projector slice), `w1` is the one on the sink side:
+Each frozen interval is split into one source-only buffer slice, `fw-2` overlap slices,
+and one sink-only buffer slice. The projector sits on the source-only buffer slice
+(`w2`), and the hop goes from there into the first overlap slice (`w1`):
 
-| interval | w2 (source side, projector) | w1 (sink side) | hop link zeroed for D_snk |
-|---|---|---|---|
-| F0 | `fw-2`   | `fw-3`   | rooted on `fw-3` |
-| F1 | `c1+1`   | `c1+2`   | rooted on `c1+1` |
+| interval | source-only (w2, projector) | overlap | sink-only | hop link zeroed for D_snk |
+|---|---|---|---|---|
+| F0 | `fw-1` | `[1, fw-2]` | `0` | rooted on `fw-2` |
+| F1 | `c1`   | `[c1+1, c1+fw-2]` | `c1+fw-1` | rooted on `c1` |
 
-Examples (c1 = 32): fw=4: F0 (w2,w1)=(2,1), F1 (33,34). fw=8: F0 (6,5), F1 (33,34).
-For fw=4 this coincides with the earlier center placement.
+Hop targets `w1`: `fw-2` (F0) and `c1+1` (F1). Example c1 = 32, fw = 4: projector on 3
+and 32, overlap `{1, 2}` and `{33, 34}`, sink-only buffers 0 and 35. Growing fw grows
+only the overlap.
 
-Why one slice in rather than on the edge: the sink factor must depend only on frozen +
-sink links. With `n_smear = 1` stout (`orthog_dir = -1`), the clover term on `w1` uses
-smeared spatial links on `w2`, whose backward temporal staple reaches the t link rooted
-one slice before `w2`. With `w2 = c1+1` that link is rooted on `c1` (frozen). With
-`w2 = c1` it would be rooted on `c1-1` (source active), and the sink factor would no
-longer factorize. Clover alone (no stout) would allow `w2 = c1`; each extra stout step
-needs about one more buffer slice.
+Why the buffer slices: the planned fix builds `D_snk` as the exact restriction of `D`
+(clover from the uncut field, only the hop dropped). Its clover term on `w1` uses the
+link `w2 -> w1` and the spatial links on `w2`, i.e. one slice before `Omega_snk`, which
+is the frozen source-only buffer slice. This only holds for an unsmeared Dirac operator:
+stout-type smearing reaches one more slice, onto dynamical source links. The code
+therefore requires `SIMPLE_FERM_STATE` in overlapping mode. The current cut-field
+operators are local regardless; the check protects the exact-`D_snk` fix. `D_src` does
+not need the sink-only buffer (it is the approximated piece and its cut-field version is
+local); the buffer keeps the layout symmetric.
 
 ### Domains
 
 ```text
-Omega_src = F0 u A_src u F1 = [0, c1+fw-1]
-            Dirichlet: zero t links rooted on Lt-1 and on c1+fw-1        (= child0 lattice)
-Omega_snk = [c1+2, Lt-1] u [0, fw-3]   (sink active + all but the first two source-side
-            slices of F0 and F1)
-            Dirichlet: zero t links rooted on c1+1 and on fw-3
+Omega_src = [1, c1+fw-2]   (A_src + all of F0, F1 except the sink-only buffer slices)
+            Dirichlet: zero t links rooted on 0 and on c1+fw-2
+Omega_snk = [c1+1, Lt-1] u [0, fw-2]   (A_snk + all of F0, F1 except the source-only
+            buffer slices)
+            Dirichlet: zero t links rooted on c1 and on fw-2   (the hop links)
 ```
 
 Two separate cut fields, two solvers. Example c1=32, fw=8, Lt=64:
 
 | field | zeroed t links (rooted on) | links cut | domain used |
 |---|---|---|---|
-| `u_src` | 39, 63 | F1 -> sink active (39->40), sink active -> F0 (63->0) | `[0, 39]` |
-| `u_snk` | 33, 5  | hop in F1 (33->34), hop in F0 (5->6) | `[34, 63] u [0, 5]` |
+| `u_src` | 38, 0 | F1 overlap -> sink-only buffer (38->39), F0 sink-only buffer -> overlap (0->1) | `[1, 38]` |
+| `u_snk` | 32, 6 | hop in F1 (32->33), hop in F0 (6->7) | `[33, 63] u [0, 6]` |
 
-The antiperiodic sign on 63->0 drops out of `u_src` (that link is cut) and stays in
-`u_snk`. Each cut field also has a second, disconnected block (`[40, 63]` for `u_src`,
-`[6, 33]` for `u_snk`); sources never touch it, so its solution stays zero.
+The antiperiodic sign on 63->0 lies only in `Omega_snk`. Each cut field also has a
+second, disconnected block (`[39, 63] u [0]` for `u_src`, `[7, 32]` for `u_snk`); sources
+never touch it, so its solution stays zero.
 
-The two domains overlap on `[c1+2, c1+fw-1]` and `[0, fw-3]`, i.e. `fw-2` slices per
-frozen interval. `Omega_snk` sits inside the child1 lattice and, with the buffer above,
-depends only on frozen + sink-region links. `Omega_src` depends only on frozen +
-source-region links.
+The two domains overlap on `[c1+1, c1+fw-2]` and `[1, fw-2]`, i.e. `fw-2` slices per
+frozen interval.
 
 ## Factorization
 
@@ -100,13 +101,12 @@ for `y in Omega_snk`, `x` outside it:
 D^-1(y,x) = - sum_{w1,w2} D_snk^-1(y,w1) D(w1,w2) D^-1(w2,x)
 ```
 
-`w1 in {fw-3, c1+2}`, `w2 in {fw-2, c1+1}`; `D(w1,w2)` is only the temporal hop
+`w1 in {fw-2, c1+1}`, `w2 in {fw-1, c1}`; `D(w1,w2)` is only the temporal hop
 (`P_+- U_t` term), so no clover term enters it.
 
 Approximation (Giusti Eq. 5.1): `D^-1(w2,x) -> D_src^-1(w2,x)`. `Omega_src` extends
 `d = fw-2` slices beyond each `w2` (the overlap thickness), so the error is expected
-`~ exp(-M_pi (fw-2))`. Compare: center placement `fw/2`, hop on the frozen edge `fw`
-(not local, see above).
+`~ exp(-M_pi (fw-2))`, the same as the previous (asymmetric) layout.
 
 Projected form (Giusti Eq. 5.3), using the same distillation projector as now, placed
 on the `w2` slices:
@@ -173,7 +173,9 @@ New optional element in `NamedObject`, next to the other factorized options:
   non-overlapping path it is called with the same two sink-edge slices as now, so the
   result is identical.
 - Geometry checks (throw with a clear message): 2 frozen intervals, equal widths,
-  `fw >= 3` (so `w1` is still frozen), `F0` starts at 0, every `t_source` in `A_src`.
+  `fw >= 3` (at least one overlap slice), `F0` starts at 0, every `t_source` in `A_src`.
+- Fermion state check: `FermionAction/FermState/Name` must be `SIMPLE_FERM_STATE`
+  (absent counts as simple, as in Chroma's reader); otherwise throw.
 - Do not add new full-field `.print()` debug dumps.
 - Header: add `bool overlapping_factorization;` to `Params::NamedObject_t`.
 - No changes to `factorized_distillation.{h,cc}`.
@@ -182,17 +184,17 @@ New optional element in `NamedObject`, next to the other factorized options:
 
 - `D_snk` exactness (not fixed by the buffer slice). The exact identity needs `D_snk`
   to be `D` restricted to `Omega_snk`, with the clover term on `w1` built from the full
-  field. `PP_snk` is built from `u_snk`, where the hop link is zeroed before smearing, so
-  the smeared spatial links on `w2`, `w1` and the clover term on `w1` differ from the
-  true restriction. The `D_snk` solve is sourced exactly on `w1`, so this is an O(1)
-  local error, not suppressed by the overlap. The buffer slice is about locality, not
-  this. `orthog_dir = decay_dir` removes the stout part; the clover part needs a clover
-  term from the uncut field and a hop-only cut, which is outside this change.
-  Validation 2 measures its size.
+  field. `PP_snk` is built from `u_snk`, where the hop link is zeroed before the clover
+  term is built, so the clover term on `w1` differs from the true restriction. The
+  `D_snk` solve is sourced exactly on `w1`, so this is an O(1) local error, not
+  suppressed by the overlap (toy: ~0.97 per quark for clover only). The buffer slice
+  keeps the exact fix local; it does not remove this error. The fix (clover from the
+  uncut field, hop-only cut) needs an operator the stock `ChimeraSolver` does not
+  provide. Validation 2 measures its size.
 - Expected effect on the signal deficit: the project review (2026-10-14) found that the
   Laplacian projector, not the `S^-1 -> D00^-1` step, dominates the loss (~0.4 per
   quark at Nproj = 128). This mode replaces the Schur step and moves the projector to
-  the first internal frozen slice; it is not expected on its own to remove the projector loss.
+  the source-only buffer slice; it is not expected on its own to remove the projector loss.
 
 ## Validation
 
@@ -206,11 +208,12 @@ New optional element in `NamedObject`, next to the other factorized options:
 4. Production comparison: `<C_ov>/<C_true>` vs the non-overlapping path at the same
    Nproj (64, 128) and fw (4, 8), 100 cfgs, same analysis scripts.
 
-## Decisions (2026-10-16)
+## Decisions
 
-1. (Revised 2026-10-16, replaces "center") Projector on the first internal frozen slice
-   from the source side (`c1+1`, `fw-2`), hop one slice toward the sink. Overlap and
-   `d` = `fw-2`; one buffer slice keeps the sink factor local with 1-step stout + clover.
+1. (Revised 2026-10-21, replaces the 2026-10-16 layouts) Symmetric layout: one
+   source-only buffer slice (projector, `c1` and `fw-1`), `fw-2` overlap slices, one
+   sink-only buffer slice. Hop from the projector slice into the first overlap slice.
+   `d` = `fw-2`. Requires `SIMPLE_FERM_STATE` (enforced).
 2. Projector on the source side of the hop (`w2`), as in Giusti Eq. 5.3. Any `fw >= 3`.
 3. The flag is a new `NamedObject_t` member (one line in the `.h`).
 4. Overlapping mode supports `num_intermediate_projectors <= 0` as "no projector" for

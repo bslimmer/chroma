@@ -710,23 +710,42 @@ void InlineMeas::func(unsigned long update_no, XMLWriter &xml_out) {
                 ", " + std::to_string(c1 - 1) + "]");
         }
 
-        // Projector on the first internal frozen slice from the source side,
-        // hop one slice toward the sink
-        ov_proj_slices = {fw - 2, c1 + 1};
-        ov_hop_slices = {fw - 3, c1 + 2};
+        // Only unsmeared fermion states: the planned exact D_snk (clover from
+        // the uncut field) reaches one slice before Omega_snk through the
+        // clover term, which stays frozen with this layout. Stout-type
+        // smearing would reach one more slice, onto dynamical source links.
+        {
+          std::istringstream fs_xml(params.param.prop.fermact.xml);
+          XMLReader fs_top(fs_xml);
+          XMLReader fs_act(fs_top, params.param.prop.fermact.path);
+          std::string ferm_state = "SIMPLE_FERM_STATE";
+          if (fs_act.count("FermState") != 0)
+            read(fs_act, "FermState/Name", ferm_state);
+          if (ferm_state != "SIMPLE_FERM_STATE")
+            throw std::runtime_error(
+                "overlapping_factorization: requires SIMPLE_FERM_STATE (no "
+                "link smearing in the Dirac operator), got " +
+                ferm_state);
+        }
+
+        // Symmetric layout per frozen interval: one source-only buffer slice
+        // (projector), fw-2 overlap slices, one sink-only buffer slice. The
+        // hop goes from the projector slice into the first overlap slice.
+        ov_proj_slices = {fw - 1, c1};
+        ov_hop_slices = {fw - 2, c1 + 1};
         for (int i = 0; i < 2; ++i) {
           ov_proj_slices_m[i] = ov_proj_slices[i];
           ov_hop_slices_m[i] = ov_hop_slices[i];
         }
 
-        // Omega_src = [0, c1+fw-1]: cut F1 -> sink active and sink active -> F0
+        // Omega_src = [1, c1+fw-2]: cut before the sink-only buffer slices
         multi1d<int> src_cut_links(2);
-        src_cut_links[0] = c1 + fw - 1;
-        src_cut_links[1] = Lt - 1;
-        // Omega_snk = [c1+2, Lt-1] u [0, fw-3]: cut the hop links
+        src_cut_links[0] = c1 + fw - 2;
+        src_cut_links[1] = 0;
+        // Omega_snk = [c1+1, Lt-1] u [0, fw-2]: cut the hop links
         multi1d<int> snk_cut_links(2);
-        snk_cut_links[0] = c1 + 1;
-        snk_cut_links[1] = fw - 3;
+        snk_cut_links[0] = c1;
+        snk_cut_links[1] = fw - 2;
 
         multi1d<LatticeColorMatrix> u_src = u;
         multi1d<LatticeColorMatrix> u_snk = u;

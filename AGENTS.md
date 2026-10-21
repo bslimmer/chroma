@@ -150,10 +150,11 @@ The current feature work has four closely related threads:
      intermediates
    - overlapping-domain (Ce/Giusti/Schaefer) variant of the parent-lattice
      test path: `specs/hier/factorized_prop_overlapping.md`, enabled with
-     `NamedObject/overlapping_factorization = true`; projector on the first
-     internal frozen slice from the source side (`c1+1`, `fw-2`), two cut-field
-     solvers (`u_src`, `u_snk`); `num_intermediate_projectors <= 0` means no
-     projector in this mode
+     `NamedObject/overlapping_factorization = true`; symmetric layout per
+     frozen interval (source-only buffer slice with the projector at `c1` /
+     `fw-1`, `fw-2` overlap slices, sink-only buffer slice), two cut-field
+     solvers (`u_src`, `u_snk`), requires `SIMPLE_FERM_STATE`;
+     `num_intermediate_projectors <= 0` means no projector in this mode
 
 4. Child-local factorized baryon tensors (LEFT sink bracket / RIGHT source
    bracket of the factorized baryon two-point function):
