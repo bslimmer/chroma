@@ -64,6 +64,7 @@
 #include "meas/inline/hadron/inline_prop_and_matelem_colorvec_w.h"
 #include "meas/inline/hadron/inline_prop_and_matelem_distillation_w.h"
 #include "meas/inline/hadron/inline_prop_and_matelem_distillation_superb_w.h"
+#include "meas/inline/hadron/inline_edge_svd_projectors_superb_w.h"
 #include "meas/inline/hadron/inline_matelem_distillation_w.h"
 #include "meas/inline/hadron/inline_prop_and_matelem_distillation2_w.h"
 #include "meas/inline/hadron/inline_prop_matelem_lm_colorvec_w.h"
@@ -180,6 +181,7 @@ namespace Chroma
 	success &= InlinePropAndMatElemColorVecEnv::registerAll();
 #ifdef BUILD_SB
 	success &= InlinePropAndMatElemDistillationSuperbEnv::registerAll();
+	success &= InlineEdgeSVDProjectorsSuperbEnv::registerAll();
 	success &= InlineUnsmearedHadronNodeDistillationSuperbEnv::registerAll();
 	success &= InlineEigenvaluesSuperbEnv::registerAll();
 #endif
