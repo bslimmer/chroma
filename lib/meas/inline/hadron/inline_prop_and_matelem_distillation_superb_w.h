@@ -73,9 +73,7 @@ namespace Chroma
   multi1d<int>                intermediate_projector_phase; /*Optional 3 integer phasing for the boundary projector colorvecs*/
   bool                        overlapping_factorization; /*Use the overlapping-domain (Giusti) factorization; see specs/hier/factorized_prop_overlapping.md*/
   std::string                 projector_type; /*Boundary projector vectors: distillation_vecs (default) or singular_vectors; see specs/hier/factorized_prop_svd_projectors.md*/
-  int                         svd_oversampling; /*singular_vectors: extra random probes beyond the rank (default 16)*/
-  int                         svd_power_iterations; /*singular_vectors: power iterations of the randomized SVD (default 2)*/
-  int                         svd_seed; /*singular_vectors: QDP RNG seed for the random probes (default 11)*/
+  std::string                 svd_basis_file; /*singular_vectors: basis file written by EDGE_SVD_PROJECTORS_SUPERB*/
       };
 
       Param_t           param;

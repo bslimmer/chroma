@@ -18,10 +18,13 @@
 #include "util/gauge/gauge_subdomain_split.h"
 
 #ifdef BUILD_SB
+#  include "io/qprop_io.h"
 #  include "util/ferm/mgproton.h"
 #  include "util/ferm/superb_contractions.h"
 #endif
 
+#include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -136,6 +139,101 @@ namespace Chroma
     SB::Tensor<Nd + 3, SB::Complex> readColorvecsOnSliceFromParentFile(
       const SB::ColorvecsStorage& sto, const multi1d<LatticeColorMatrix>& u, int global_t,
       int local_t, int n_colorvecs, int parent_Lt, double* checksum = nullptr);
+
+    //------------------------------------------------------------------------
+    // Edge-SVD boundary projectors, see specs/hier/factorized_prop_svd_projectors.md
+    //------------------------------------------------------------------------
+
+    //! Fields restricted to one time slice, order cxyztXns (t extent 1, n = columns)
+    using EdgeSVDSliceTensor = SB::Tensor<Nd + 4, SB::Complex>;
+    //! Orthonormal projector vectors per projector slice (slice number -> vectors)
+    using EdgeSVDBasis = std::map<int, EdgeSVDSliceTensor>;
+    //! Linear map on a set of lattice fermions (M or M^dag)
+    using EdgeSVDFermionMap =
+      std::function<SB::MultipleLatticeFermions(const SB::MultipleLatticeFermions&)>;
+
+    //! Slices of the edge-to-edge block M : p -> q, one entry per frozen interval
+    /*!
+     * Parent-lattice prototype geometry: two frozen intervals F0 = [0, fw0-1] and
+     * F1 = [c1, c1+fw1-1].
+     * Non-overlap (M = T^dag): p = {t_end(F1), 0}, a = e_p = {t_end(F1)-1, 1},
+     *   b = e_s = {c1+1, t_end(F0)-1}, q = {c1, t_end(F0)}; the same projector slices
+     *   as the non-overlapping prop chain.
+     * Overlap (M = G_F): p = w2 = {fw-1, c1}, a = w1 = {fw-2, c1+1}, b empty,
+     *   q = {0, c1+fw-1}; slab_cut_links = t links zeroed for D_F.
+     */
+    struct EdgeSVDSlices {
+      std::vector<int> p, a, b, q;
+      std::vector<int> slab_cut_links; //!< overlap only
+      int frozen_width = 0;	       //!< width of F0
+      int cut1 = 0;		       //!< first slice of F1
+    };
+
+    //! Slices of M for the given geometry and path; throws if the layout is unsupported
+    EdgeSVDSlices edgeSVDSlices(const FactorizedPropGeometry& geometry, bool overlapping, int Lt);
+
+    //! Cut field of the non-overlapping parent-lattice prototype (D_sep with D00 one slice in)
+    /*!
+     * Zeroes the t links rooted on t_start and t_end - 1 of every frozen interval of
+     * geometry.plan.child0_frozen_local_intervals (the u_sep of the prop measurement).
+     */
+    multi1d<LatticeColorMatrix> nonOverlapCutField(const multi1d<LatticeColorMatrix>& u,
+						   const FactorizedPropGeometry& geometry, int Lt);
+
+    //! Top-`rank` right singular vectors on p_slices of M : p_slices -> q_slices
+    /*!
+     * Randomized SVD (Halko-Martinsson-Tropp) with Gram-matrix orthonormalization and
+     * Rayleigh-Ritz; M is block-diagonal over the slice pairs, so all intervals share the
+     * solves. Fills the Ritz singular values (all rank + oversampling) and the max
+     * deviation of phi^dag phi from the identity, per p slice.
+     */
+    EdgeSVDBasis computeEdgeSVDBasis(const EdgeSVDFermionMap& M, const EdgeSVDFermionMap& Mdag,
+				     const std::vector<int>& p_slices,
+				     const std::vector<int>& q_slices, int rank, int oversampling,
+				     int power_its, int seed_value, int batch,
+				     std::map<int, std::vector<double>>& sing_vals,
+				     std::map<int, double>& ortho_err);
+
+    //! Metadata stored with an edge-SVD basis file
+    struct EdgeSVDBasisInfo {
+      int version = 1;
+      multi1d<int> latt_size;
+      int decay_dir = Nd - 1;
+      bool overlapping = false;
+      int frozen_width = 0;
+      int cut1 = 0;
+      std::vector<int> projector_slices; //!< in file order
+      std::vector<int> far_slices;	 //!< same order as projector_slices
+      int rank = 0;			 //!< vectors stored per slice
+      int oversampling = 0;
+      int power_iterations = 0;
+      int seed = 0;
+      std::vector<std::vector<double>> singular_values; //!< per projector slice
+      std::vector<double> orthonormality_error;	     //!< per projector slice
+      std::string fermact_xml;			     //!< FermionAction XML as read
+    };
+
+    //! Write a basis file (StorageTensor, order cxyzXsnt, sparse in t; only the p slices)
+    /*!
+     * \param config_xml: gauge record XML, stored as Config_info
+     * \param prop: Propagator block (FermionAction + InvertParam), stored for reference
+     */
+    void writeEdgeSVDBasis(const std::string& file, const EdgeSVDBasis& basis,
+			   const EdgeSVDBasisInfo& info, XMLBufferWriter& config_xml,
+			   const ChromaProp_t& prop);
+
+    //! Read the metadata of a basis file
+    EdgeSVDBasisInfo readEdgeSVDBasisInfo(const std::string& file);
+
+    //! Throw if the file does not fit this run (lattice, geometry, slices, rank,
+    //! fermion action)
+    void checkEdgeSVDBasisInfo(const EdgeSVDBasisInfo& info, const EdgeSVDSlices& slices,
+			       bool overlapping, int decay_dir, int rank,
+			       const std::string& fermact_xml);
+
+    //! Read the first `rank` vectors of each of `slices` from a basis file
+    EdgeSVDBasis readEdgeSVDBasis(const std::string& file, const std::vector<int>& slices,
+				  int rank);
 #endif
 
   } // namespace FactorizedDistillation

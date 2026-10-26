@@ -1,276 +1,300 @@
 # Edge-SVD Boundary Projectors for the Factorized Perambulator
 
-Status: implemented 2026-10-22 (working tree, not committed). The .cc compiles to an
-object file (g++ / OpenMPI, QDP++ `eloy/localbinarydb` scalar, superbblas master,
-`BUILD_SB`). The helper routines were run standalone on a 4^3x8 scalar lattice (see
-Verification). It has not yet been run inside Chroma with real solvers.
-Target files: `lib/meas/inline/hadron/inline_prop_and_matelem_distillation_superb_w.cc`,
-plus new fields in `Params::NamedObject_t` in the matching `.h`.
+Status: two-measurement design implemented 2026-10-25 (working tree, not committed).
+Compiles; the shared code passes a standalone round-trip test; not yet run inside Chroma
+with real solvers. The 2026-10-22 version computed the basis inside the prop measurement;
+that computation now lives in its own measurement, which writes the basis to a file, and
+the prop measurement reads that file. Reason: the 2 h wall-time cap. A 32^3x64 prop run
+with 128 colorvecs already takes about 2 h, and the basis adds about 864 slab solves at
+R = 128 (k = 144, 2 power iterations), or about 3200 at R = 512.
+Target files: new `lib/meas/inline/hadron/inline_edge_svd_projectors_superb_w.{cc,h}`;
+`inline_prop_and_matelem_distillation_superb_w.{cc,h}`; `lib/util/ferm/factorized_distillation.{h,cc}`;
+`inline_hadron_aggregate.cc`; `lib/Makefile.am`, `lib/CMakeLists.txt`.
 References: `specs/hier/factorized_prop.md`, `specs/hier/factorized_prop_overlapping.md`;
-Ce, Giusti, Schaefer, arXiv:1601.04587 (D-adapted boundary vectors);
-Halko, Martinsson, Tropp, arXiv:0909.4061 (randomized range finder);
-toy comparison `fact_prop_testing/toy_overlap_vs_nonoverlap/basis_cmp.py`.
+Ce, Giusti, Schaefer, arXiv:1601.04587; Halko, Martinsson, Tropp, arXiv:0909.4061;
+toys `fact_prop_testing/toy_overlap_vs_nonoverlap/{basis_cmp,check_rsvd,tune}.py`;
+walkthrough doc "Edge-SVD Projectors: Code Walkthrough".
 
 ## Goal
 
-Add an XML option that replaces the vectors used to build the boundary projector `Pi`.
-Today `Pi` is a per-spin projector onto Laplacian eigenvectors (`distillation_vecs`).
-The new option (`singular_vectors`) uses the dominant singular vectors of the
-edge-to-edge block that carries the quark across the frozen region. These are
-spin-colour vectors, and they are computed once per run from frozen-region operators only.
+Replace the vectors that define the boundary projector `Pi` in the factorized prop
+measurement. Today `Pi` is a per-spin projector onto Laplacian eigenvectors
+(`distillation_vecs`). The new option (`singular_vectors`) uses the dominant right
+singular vectors of the edge-to-edge block M that carries the quark across the frozen
+region. They are spin-colour vectors that depend only on frozen-region operators.
 
-Only the generation of the projection vectors changes, plus the projection helper
-that applies them. The chain, cut fields, production solvers, signs, slices, phasings,
-and output format are unchanged.
+Two measurements:
+
+1. `EDGE_SVD_PROJECTORS_SUPERB` (new): computes the basis for one configuration with a
+   randomized SVD and writes it, with its singular values and metadata, to a file.
+2. `PROP_AND_MATELEM_DISTILLATION_SUPERB` (existing): with
+   `projector_type = singular_vectors`, reads the basis from that file and uses its first
+   R vectors. The chain, cut fields, production solvers, signs, slices, phasings and output
+   format are unchanged.
+
+The basis is ordered by decreasing singular value. A file computed at a large rank
+R_max therefore serves every R <= R_max, so a rank scan needs one basis run per config.
+Taking the first R columns is the best rank-R choice within the computed subspace, and at
+least as accurate as a run at rank R. The basis depends only on frozen links, so in a
+two-level scheme it is computed once per frozen configuration.
 
 Toy motivation (4^3x16, clover, rough field, per-quark ratio vs. the same chain with
 `Pi = 1`, rank R on a 768-dim slice): at R = 32, Laplacian 0.37 / 0.41, edge-SVD
-0.71 / 0.77 (non-overlap / overlap). The frozen-only overlap block `G_F` matched the
-true-`D_snk` block `G` to ~0.01.
+0.71 / 0.77 (non-overlap / overlap).
 
-## XML
+## Blocks (unchanged from the 2026-10-21 spec)
 
-New optional elements in `NamedObject`, next to the other factorized options:
+Notation: `R_t` = restriction to slice(s) t, `D` = full Dirac operator (`fLinOp`),
+`D^dag` = `fLinOp` with `MINUS`, `g5` = `Gamma(Ns*Ns-1)`, `(X^-1)^dag = g5 X^-1 g5`.
+The basis is the top-R right singular vectors on the projector slice p of `M : p -> q`.
+Two frozen intervals `F0 = [0, fw-1]`, `F1 = [c1, c1+fw-1]`; both intervals are handled
+in the same solves (M is block-diagonal over them).
 
-```xml
-<projector_type>singular_vectors</projector_type>  <!-- distillation_vecs (default) | singular_vectors -->
-<num_intermediate_projectors>128</num_intermediate_projectors>  <!-- existing element -->
-<svd_oversampling>16</svd_oversampling>            <!-- optional, default 16 -->
-<svd_power_iterations>2</svd_power_iterations>     <!-- optional, default 2 -->
-<svd_seed>11</svd_seed>                             <!-- optional, default 11 -->
-```
-
-- `projector_type` absent or `distillation_vecs`: current behaviour, bit-for-bit
-  unchanged, in both paths. Any other value: throw. The four new elements are only
-  echoed in the output XML for the non-default type.
-- `singular_vectors`:
-  - `num_intermediate_projectors` = R = the number of spin-colour singular vectors per
-    projector slice (total rank of `Pi` on that slice). For comparisons at equal
-    rank with `distillation_vecs` (rank 4N per slice), use R = 4N.
-  - Non-overlapping path: R must be > 0, otherwise throw.
-  - Overlapping path: R <= 0 keeps its current meaning (`Pi = 1`, no vectors are computed).
-  - `intermediate_projector_phase` must be all zero, otherwise throw (phasing is a
-    property of the Laplacian basis only).
-  - R must be <= 6 V3 (the spin half that the temporal hop passes); otherwise throw.
-- Output XML group `EdgeSVDProjectors`: rank, oversampling, power iterations, seed,
-  time, and per projector slice (`elem`): `projector_slice`, `far_slice`, all k Ritz
-  `singular_values`, and `orthonormality_error` (max |phi^dag phi - 1|).
-
-## Geometry and notation
-
-Same assumptions as the current code: two frozen intervals from
-`plan.child0_frozen_local_intervals`, `F0 = [0, fw-1]`, `F1 = [c1, c1+fw-1]`.
-`R_t` = restriction to slice(s) t (`restrictToTimeslices`). `D` = `fLinOp` (uncut `u`),
-`D^dag` = `fLinOp` with `MINUS`. `g5` = `Gamma(Ns*Ns-1)`. `S_X = X^-1` via
-`SB::doInversion` with solver X. Inverse adjoints use g5-hermiticity:
-`(X^-1)^dag = g5 X^-1 g5`.
-
-For every case below, the basis is the top-R **right** singular vectors of an operator
-`M : slice p -> slice q`, where `p` is the projector slice.
-
-### Non-overlapping path
-
-Projector slices (as now): `p = c1+fw-1` (F1) and `p = 0` (F0). `D00` slabs:
-`[c1+1, c1+fw-2]` and `[1, fw-2]` (from `PP_sep`). The quark-line block is
-`T = R_p D R_{e_p} S_00 R_{e_s} D R_q`, with `Pi` acting on its output, so the basis
-is the left singular vectors of `T` = right singular vectors of `M = T^dag`:
+Non-overlapping (`M = T^dag`, slab solves with the `u_sep` solver, cuts rooted on
+`t_start` and `t_end - 1` of each interval):
 
 ```text
 M   y = R_q D^dag R_{e_s} g5 S_00 g5 R_{e_p} D^dag y      (y on p)
 M^dag x = R_p D R_{e_p} S_00 R_{e_s} D x                  (x on q)
 ```
 
-| interval | p (Pi) | e_p | e_s | q (source buffer) | solver |
-|---|---|---|---|---|---|
-| F1 | c1+fw-1 | c1+fw-2 | c1+1 | c1 | `PP_sep` (existing) |
-| F0 | 0 | 1 | fw-2 | fw-1 | `PP_sep` (existing) |
+| interval | p (Pi) | e_p | e_s | q |
+|---|---|---|---|---|
+| F1 | c1+fw-1 | c1+fw-2 | c1+1 | c1 |
+| F0 | 0 | 1 | fw-2 | fw-1 |
 
-Example c1 = 32, fw = 4: F1 `p=35, e_p=34, e_s=33, q=32`; F0 `p=0, e_p=1, e_s=2, q=3`.
-Requires `F0` to start at 0 and both widths >= 3 (checked).
-
-### Overlapping path
-
-Projector slices (as now): `w2 = c1` (F1) and `w2 = fw-1` (F0); hop targets
-`w1 = c1+1`, `fw-2`. The block uses a new frozen-only operator `D_F`:
+Overlapping (`M = G_F`, slab solves with `D_F` on `u` with t links cut on
+`{c1, c1+fw-1, fw-2, Lt-1}`):
 
 ```text
-u_F = u with t links zeroed on slices {c1, c1+fw-1, fw-2, Lt-1}
-      -> Dirichlet slabs [c1+1, c1+fw-1] and [0, fw-2]
-PP_F = ChimeraSolver(fermact, invParam, u_F)
-
 M   x = R_q S_F R_{w1} D x                    (x on p = w2)
 M^dag y = R_p D^dag R_{w1} g5 S_F g5 R_q y      (y on q)
 ```
 
-| interval | p = w2 (Pi) | w1 | q (sink-only buffer) | solver |
-|---|---|---|---|---|
-| F1 | c1 | c1+1 | c1+fw-1 | `PP_F` (new, temporary) |
-| F0 | fw-1 | fw-2 | 0 | `PP_F` (new, temporary) |
+| interval | p = w2 (Pi) | w1 | q |
+|---|---|---|---|
+| F1 | c1 | c1+1 | c1+fw-1 |
+| F0 | fw-1 | fw-2 | 0 |
 
-Example c1 = 32, fw = 4: F1 `p=32, w1=33, q=35`; F0 `p=3, w1=2, q=0`.
+Example c1 = 32, fw = 4: non-overlap p = {35, 0}, q = {32, 3}; overlap p = {32, 3},
+q = {35, 0}. Requires `F0` to start at 0 and widths >= 3. The overlapping mode requires
+`SIMPLE_FERM_STATE`, as the overlapping prop path already does. Testing uses simple
+fermion states throughout.
 
-`D_F` is not `D_snk`. Using `PP_snk` would make the basis depend on sink-active links,
-which is not valid for two-level. `PP_F` is built only when needed, and it is destroyed
-after the basis is computed, so no third MG setup stays alive during the production loop.
-While the basis is being computed, three MG setups (`PP_src`, `PP_snk`, `PP_F`) are in memory.
+## Algorithm (unchanged)
 
-### Both intervals in one batch
+k = R + oversampling, qp = power iterations.
 
-`M` is block-diagonal over the two intervals: their p, q and slab slices are disjoint and
-the slabs are decoupled. One application of `M` (or `M^dag`) to a vector supported on
-both p slices (or both q slices) applies both blocks at once. All solves are therefore
-shared between the two intervals. Only the small dense linear algebra is done
-separately per slice. If the two intervals end up with different column counts (only
-after rank truncation), the shorter set repeats earlier columns and those outputs are
-dropped, so no solve ever gets a zero source.
+1. Save the QDP RNG state, seed with `seed`, draw k Gaussian fields, keep their values on
+   the q slices (`Omega`), restore the RNG state.
+2. `Y = M^dag Omega`.
+3. qp times: `Y <- orth(Y)`; `Y <- M^dag (M Y)`.
+4. `Q = orth(Y)` (throw if fewer than R columns survive).
+5. `Z = M Q`; per slice `Z^dag Z = W Sigma^2 W^dag` (`SB::svd`, k x k); `phi = Q W[:, :R]`.
 
-## Algorithm (randomized SVD, fixed cost)
+`orth` = Cholesky-QR through the Gram matrix, twice, dropping eigenvalues below
+100 eps lambda_max. Cost: k (2 + 2 qp) slab solves, batched by `max_rhs`, shared by both
+intervals. Default qp = 2: on the toy it matches the exact-SVD basis, while qp = 1 lost
+up to 0.06 per quark at small R.
 
-k = R + `svd_oversampling`, qp = `svd_power_iterations`.
-"Per slice" means separately for each of the two p (or q) slices.
+## Measurement 1: EDGE_SVD_PROJECTORS_SUPERB (new)
 
-1. Save the QDP RNG state, seed with `svd_seed`. Draw k Gaussian `LatticeFermion`s and
-   keep their values on the two q slices: `Omega`. Restore the RNG state.
-2. `Y = M^dag Omega` (lands on the p slices).
-3. Repeat qp times: `Y <- orth(Y)`; `Y <- M^dag (M Y)`.
-4. `Q = orth(Y)` per p slice (k orthonormal columns, or fewer if rank-deficient;
-   throw if fewer than R).
-5. `Z = M Q` (lands on the q slices).
-6. Per slice: `C = Z^dag Z` (k x k), `SB::svd(C) -> W, lambda` (descending).
-   Singular values `sigma = sqrt(lambda)`. Basis on p: `phi = Q W[:, 0:R]`.
+### XML
 
-`orth(Y)` per slice (Cholesky-QR via the Gram matrix, done twice for stability):
-`C = Y^dag Y`, `SB::svd(C) -> W, lambda`, keep `lambda_i > 100 eps lambda_0`
-(eps of the build precision), `Y <- Y W_keep diag(lambda_keep^-1/2)`; repeat once.
+```xml
+<elem>
+  <Name>EDGE_SVD_PROJECTORS_SUPERB</Name>
+  <Frequency>1</Frequency>
+  <Param>
+    <rank>512</rank>                                   <!-- R_max stored in the file -->
+    <oversampling>16</oversampling>                     <!-- optional, default 16 -->
+    <power_iterations>2</power_iterations>              <!-- optional, default 2 -->
+    <seed>11</seed>                                     <!-- optional, default 11 -->
+    <overlapping_factorization>true</overlapping_factorization>  <!-- default false -->
+    <max_rhs>4</max_rhs>                                <!-- optional, default 8 -->
+    <decay_dir>3</decay_dir>
+    <Propagator>                                        <!-- same block as the prop measurement -->
+      <FermionAction>...</FermionAction>
+      <InvertParam>...</InvertParam>
+    </Propagator>
+  </Param>
+  <NamedObject>
+    <gauge_id>default_gauge_field</gauge_id>
+    <frozen_boundary_sidecar_file>...</frozen_boundary_sidecar_file>
+    <frozen_boundary_child_id>0</frozen_boundary_child_id>
+    <svd_basis_file>...</svd_basis_file>
+  </NamedObject>
+</elem>
+```
 
-Cost: k (2 + 2 qp) applications of `M` / `M^dag`, each one slab solve (shared by both
-intervals). Example: R = 128, k = 144, qp = 2 gives 864 solves. The slab solves run on the
-full lattice (the cut operator is block-diagonal), but they are well conditioned.
-`M` is applied in batches of `max_rhs` columns using the existing multi-RHS
-`SB::doInversion(PP, out, in, max_rhs)`.
+- `rank` must satisfy 0 < rank <= 6 V3 (the spin half that the hop passes).
+- `Propagator` is read with the existing `ChromaProp_t` reader; only `FermionAction` and
+  `InvertParam` are used.
 
-Memory: `Omega`, `Y`, `Q`, `Z` are stored as slice tensors (`toSBTensor(psi, t, 1)`, order
-`cxyztXns`, t extent 1, columns on `n`), not as `LatticeFermion` vectors. Full
-`LatticeFermion`s exist only for the batch being solved (at 32^3x64 one
-`LatticeFermion` is ~0.4 GB; one slice column is ~6 MB in double).
+### Steps
 
-Default qp = 2 (changed from 1 in the draft). Toy check of the randomized basis against
-the exact SVD basis (per-quark ratio relative to `Pi = 1`, rough 4^3x16 clover field,
-mean of 2 seeds, oversampling 16):
+1. Read the gauge field from the named object map; write the gauge observables
+   (`MesPlq`) to the output XML, for information only.
+2. Load the geometry with `loadFactorizedPropGeometry(sidecar, child_id, decay_dir)`.
+3. Get the slice lists p, q and the two intermediate lists from the shared helper
+   `edgeSVDSlices(geometry, overlapping, Lt)` (below). It runs the same layout checks
+   as the prop measurement.
+4. Build `fLinOp` from the uncut field (as the prop measurement does), and the slab
+   solver: non-overlap `u_sep` via the shared helper `nonOverlapCutField`; overlap
+   `u_F` with the four cuts above. One `SB::ChimeraSolver`.
+5. Build `M`, `M^dag` from the formulas above and call `computeEdgeSVDBasis`.
+6. Write the file (Storage format, below). Write a summary (rank, time, sigma_1,
+   sigma_R/sigma_1 and orthonormality error per slice) to the output XML.
 
-| path, R | exact SVD | qp = 0 | qp = 1 | qp = 2 | qp = 3 |
-|---|---|---|---|---|---|
-| non-overlap, 8 | 0.407 | 0.190 | 0.348 | 0.383 | 0.401 |
-| non-overlap, 32 | 0.713 | 0.461 | 0.699 | 0.713 | 0.714 |
-| non-overlap, 64 | 0.844 | 0.592 | 0.815 | 0.845 | 0.849 |
-| overlap, 8 | 0.461 | 0.302 | 0.458 | 0.461 | 0.461 |
-| overlap, 32 | 0.767 | 0.577 | 0.764 | 0.770 | 0.768 |
-| overlap, 64 | 0.889 | 0.746 | 0.879 | 0.888 | 0.889 |
+### File format
 
-## Existing Chroma / superbblas pieces used (nothing reimplemented)
+`SB::StorageTensor<Nd + 4, SB::ComplexD>`, order `cxyzXsnt` (the code's even-odd layout, the same as
+`SB::asTensorView(LatticeFermion)`; x = Lx/2, X = 2), dimensions `latticeSize` with `n = rank` and `t = Lt`, `Sparse`
+storage, `BlockChecksum`, `SharedFSFile`. Only the two projector slices are written:
+column j of slice p at `t = p`, `n = j`. Metadata (XML, root `EdgeSVDBasis`, broadcast
+from the master node like the perambulator metadata):
 
-- `SB::svd<Nu,Ns,Nv>(x, rows, cols, label)` (superb_contractions.h; used in mgproton for
-  null-vector blocking): all dense SVDs, which here are only the small k x k Gram
-  matrices. superbblas factors each matrix once and the result is then replicated
-  (`make_sure(none, OnHost, OnEveryoneReplicated)`), so every rank uses identical vectors.
-  The small coefficient matrices are copied to a tensor with the distribution of the Gram
-  matrix before contracting with the slice tensors (the mgproton
-  `getDeflationProj` pattern).
-- `SB::contract`: Gram matrices `Y^dag Y` over `cxyztXs` (does the MPI reduction) and
-  products `Y W`.
-- `SB::doInversion` (multi-RHS `MultipleLatticeFermions` form), `fLinOp` with
-  `PLUS` / `MINUS`, `restrictToTimeslices`, `toSBTensor`, `returnNLatticeFermions`,
-  `zeroTemporalLinksOnSlice`: all applications of `M`.
-- Not used: PRIMME via `SB::getInexactEigensolverGD` on `M^dag M`. It would work, but
-  its matvec count is not fixed, it is harder to batch, and its operator domain is the
-  full lattice. It stays a fallback if the randomized basis turns out to be inaccurate.
+- `order`, `version` (1), `lattSize`, `decay_dir`
+- `overlapping_factorization`, `frozen_width`, `cut1`
+- `projector_slices`, `far_slices` (in matching order)
+- `rank`, `oversampling`, `power_iterations`, `seed`
+- `num_singular_values` (k) and `singular_values` (all k Ritz values per projector slice,
+  slice-major), `orthonormality_error` (per projector slice)
+- `Config_info` (gauge XML, for reference; not checked)
+- `Propagator` (the `ChromaProp_t` block: FermionAction and InvertParam). The prop
+  measurement reads the FermionAction back with `readXMLGroup` and compares it to its own
+  with all whitespace removed.
 
-## Implementation (as written)
+At 32^3, one column is 12 V3 complex doubles = 6.3 MB per slice: 6.4 GB per config at
+R_max = 512, 1.6 GB at 128.
 
-- `.h`: `std::string projector_type; int svd_oversampling; int svd_power_iterations;
-  int svd_seed;` in `NamedObject_t`; `read` / `write` with the defaults above.
-- File-local helpers in the `.cc`, next to `projectOnSlices`:
-  - `projectOnSlicesSV(psi, slices, basis)`: `out|_t = phi_t (phi_t^dag psi|_t)`,
-    contracting `c,x,y,z,X,s`; zero on other slices. `basis` is
-    `std::map<int, SB::Tensor<Nd+4, SB::Complex>>` (slice -> `cxyztX s n`, t extent 1).
-  - `computeEdgeSVDBasis(M, Mdag, p_slices, q_slices, R, oversampling, power_its, seed,
-    batch, sing_vals, ortho_err)`: the algorithm above.
-  - `edgeSVDApply`, `edgeSVDOrthonormalize`, `edgeSVDGram`, `edgeSVDGramEig`,
-    `edgeSVDTimesSmall`, `newEdgeSVDSliceTensor`: batching, Cholesky-QR, Gram, SVD and
-    small-matrix products.
-- In `func`: `sv_projector` flag and the R / phase / 6V3 checks next to the solver
-  setup; the basis is computed right after `fLinOp` is built and before the `t_source`
-  loop, with `M` / `M^dag` lambdas built per path from the formulas above. `PP_F` is
-  freed right after. `colorvec_proj` is not loaded in `singular_vectors` mode. The two
-  existing projector call sites call `projectOnSlicesSV` instead of `projectOnSlices`
-  when `sv_projector` is set.
-- No changes to `factorized_distillation.{h,cc}`. No new full-field `.print()` dumps.
+## Measurement 2: PROP_AND_MATELEM_DISTILLATION_SUPERB (changes)
+
+### XML
+
+```xml
+<projector_type>singular_vectors</projector_type>     <!-- distillation_vecs (default) | singular_vectors -->
+<num_intermediate_projectors>128</num_intermediate_projectors>  <!-- R used, <= rank in the file -->
+<svd_basis_file>...</svd_basis_file>                  <!-- required for singular_vectors -->
+```
+
+- Default (`projector_type` absent or `distillation_vecs`): unchanged, bit for bit.
+- `svd_oversampling`, `svd_power_iterations`, `svd_seed` are removed from this
+  measurement (they belong to measurement 1). There is no in-line computation:
+  `singular_vectors` without `svd_basis_file` throws.
+- Checks kept from the in-line version: R > 0 (non-overlap), zero
+  `intermediate_projector_phase`, R <= 6 V3.
+
+### Reading the basis
+
+Replaces the in-line computation block (lambdas, `PP_F`, `computeEdgeSVDBasis` call).
+Still before the `t_source` loop:
+
+1. Open the file with `SB::StorageTensor<Nd + 4, SB::ComplexD>(file, true, "/EdgeSVDBasis/order")`.
+2. Parse the metadata and check, throwing with a clear message on a mismatch:
+   - `lattSize`, `decay_dir`, `overlapping_factorization`, `frozen_width`, `cut1`;
+   - `projector_slices` equal the slices this run projects on (from `edgeSVDSlices`);
+   - `rank` >= `num_intermediate_projectors`;
+   - the `FermionAction` XML equals this run's, compared with all whitespace removed.
+3. For each projector slice p: copy `n = 0..R-1`, `t = p` from the file into a slice
+   tensor (`cxyztXns`, t extent 1, `SB::Complex`), stored in `sv_basis[p]`.
+4. Write the file name, the R used and sigma_R/sigma_1 per slice to the output XML.
+
+`projectOnSlicesSV` and the two call sites are unchanged.
+
+## Code organisation
+
+Move to `factorized_distillation.{h,cc}` (namespace `FactorizedDistillation`), shared by
+both measurements:
+
+- `EdgeSVDSlices edgeSVDSlices(const FactorizedPropGeometry&, bool overlapping, int Lt)`:
+  returns p, a, b, q (one entry per interval, F1 then F0 for non-overlap, F0 then F1 for
+  overlap, as now) and runs the geometry checks.
+- `multi1d<LatticeColorMatrix> nonOverlapCutField(u, geometry, decay_dir)`: the existing
+  `u_sep` loop. The prop measurement calls it too (same cuts, no behaviour change), so the
+  two measurements cannot drift apart.
+- `computeEdgeSVDBasis` and its helpers (`edgeSVDApply`, `edgeSVDOrthonormalize`,
+  `edgeSVDGram`, `edgeSVDGramEig`, `edgeSVDTimesSmall`, `newEdgeSVDSliceTensor`), moved
+  unchanged out of the prop `.cc`.
+- `writeEdgeSVDBasis(file, basis, info, config_xml, prop)`, `readEdgeSVDBasisInfo(file)`,
+  `checkEdgeSVDBasisInfo(info, slices, overlapping, decay_dir, R, fermact_xml)` and
+  `readEdgeSVDBasis(file, slices, R)` (which also checks the layout dimensions and that the
+  vectors read are orthonormal to 1e-5): the format lives in one place. `EdgeSVDBasisInfo`
+  holds the metadata.
+
+`projectOnSlicesSV` stays in the prop `.cc` (only that measurement applies `Pi`).
+
+New measurement files follow the pattern of
+`inline_factorized_baryon_tensor_distillation_superb_w.{cc,h}`: `Params` with
+`read`/`write`, `InlineMeas::func`, `registerAll`, guarded by `BUILD_SB`; registered in
+`inline_hadron_aggregate.cc`; added to `lib/Makefile.am` and `lib/CMakeLists.txt`.
 
 ## Known caveats
 
-- `D_F` is built like the other cut operators (links zeroed before the clover term), so
-  on its edge slices it is not the exact restriction of `D`. This is fine for a basis
-  (it only has to span the right directions). The t links rooted on c1+fw-1 and Lt-1
-  are zeroed, so the clover leaves on the slab edges that would reach the active
-  slices c1+fw and Lt-1 vanish. On the slab, `D_F` therefore depends only on frozen links.
-- Non-overlapping path with stout smearing (not `SIMPLE_FERM_STATE`): `fLinOp` hops use
-  smeared links, so the basis is not strictly frozen-only. This doesn't matter for
-  full-config tests, but it does for two-level.
-- This is a deterministic truncation, so a bias remains. Check it against the
-  `Pi = 1` overlap run (Validation 3).
-- The basis is per configuration. In this measurement it is recomputed every run; it is not
-  stored (see Open).
+- `D_F` and `D_00` are built like the other cut operators (links zeroed before the clover
+  term). This is fine for a basis (it only has to span the right directions).
+- The basis is a deterministic truncation, so a bias remains. Check it against the overlap
+  `Pi = 1` run.
+- The file is tied to one configuration, one fermion action and one geometry. The checks
+  above enforce the lattice, geometry, slices, rank and fermion action. Whether the file
+  comes from the same gauge configuration is not checked (2026-10-26); matching basis files
+  to configurations is up to the job scripts.
 
-## Verification done (2026-10-22)
+## Verification done
 
-1. Compile: the modified `.cc` compiles to an object file with `-Wall` (only the
-   sign-compare warnings the file already had), against QDP++ `eloy/localbinarydb`
-   (scalar), superbblas master and OpenMPI, with `BUILD_SB` on.
-2. Standalone runtime test of the helpers (`t_edge_svd.cc`, scalar QDP, 4^3x8): a known
-   block-diagonal operator on two slice pairs with random site spin and colour matrices.
-   - Adjoint consistency of the test operator ~1e-15 relative.
-   - Exact reference: `SB::svd` of the dense block. With a full-rank sketch (k = 768),
-     singular values agree to 1e-14, eigen-residuals are 1e-14, and
-     |phi^dag phi - 1| is 1e-14.
-   - With k = R + 16 on this flat spectrum, the top-R singular values are within ~5% of exact.
-   - `projectOnSlicesSV`: Pi Pi = Pi to 1e-27, zero off the projector slices,
-     Pi phi_0 = phi_0.
-3. Toy (Python, the toy Wilson-clover operators): the C++ formulas for `M` and `M^dag` in
-   both paths are adjoint to 1e-15. The randomized basis reproduces `Pi = 1` exactly at full
-   rank (R = 6 V3), and matches the exact-SVD basis at the default settings (table above).
+2026-10-25 (two-measurement version):
 
-Not verified: anything multi-rank (the standalone test is single-process); the real
-`ChimeraSolver` slab solves; GPU builds.
+1. Compile: `factorized_distillation.cc`, `inline_edge_svd_projectors_superb_w.cc`,
+   `inline_prop_and_matelem_distillation_superb_w.cc` and `inline_hadron_aggregate.cc` compile
+   to object files (g++ / OpenMPI, QDP++ `eloy/localbinarydb` scalar, superbblas master,
+   `BUILD_SB`, `-Wall`); no new warnings beyond patterns already in the file.
+2. `fact_prop_testing/edge_svd_runtime_test/t_edge_svd_io.cc` (4^3x16 scalar, synthetic M),
+   all passed:
+   - `edgeSVDSlices` for both paths and `nonOverlapCutField` (exactly the links rooted on
+     t_start and t_end - 1 of each interval);
+   - write -> read: metadata exact (singular values to 1e-13), vectors exact for R and R/2,
+     the file holds only the two projector slices (size = 2 x R x 12 V3 x 16 B + header);
+   - checks: pass for the matching run (FermionAction with different whitespace); throw on
+     a different mass, a file rank below R, the wrong path, and a read of more vectors than
+     stored. (Re-run 2026-10-26 after removing the plaquette check: all passed.)
 
-## Validation still to do
+2026-10-22 (in-line version; the moved SVD code is unchanged):
 
-1. `projector_type` absent: SDB identical to the current code on one config, both paths.
-2. Full-rank check (small lattice, e.g. 8^3x16): with R = 6 V3 (the whole spin half that
-   the hop passes), `singular_vectors` must reproduce the `Pi = 1` result to solver
-   precision. For the overlap, compare with `num_intermediate_projectors <= 0`; for the
-   non-overlap, compare with a dev-only run without the projector. This tests the slices,
-   the adjoints, the g5 handling and the orthonormalization with real solvers and MPI.
-3. On one 32^3 config, fw = 4 and 8: singular-value decay per slice, and the plateau
-   `<C_fact>/<C_true>` vs R (64, 128, 256) against `distillation_vecs` at equal total rank
-   (N = R/4) and against overlap `Pi = 1`.
-4. Production: 100 cfgs at the chosen R, same analysis scripts as `128_bw4` / `bw4_overlap`.
+3. Standalone test of the SVD helpers: full-rank sketch matches an exact `SB::svd` to 1e-14;
+   Pi Pi = Pi; zero off-slice.
+4. Toy: `M`/`M^dag` adjoint to 1e-15 in both paths; full rank reproduces `Pi = 1`; the
+   default settings match the exact-SVD basis.
+
+Not verified: multi-rank runs, the real ChimeraSolver slab solves, GPU builds.
+
+## Validation to do
+
+1. Default type: prop SDB identical to the current code on one config, both paths.
+2. Basis job on a small lattice, then the prop run reading it (MPI, real solvers).
+3. Full-rank check on a small lattice (R = 6 V3): the prop result equals `Pi = 1` to solver
+   precision.
+4. 32^3: basis-job time and slab iteration counts; singular-value decay; prop ratio vs R
+   (64, 128, 256, 512) from one R_max = 512 file, against `distillation_vecs` at equal total
+   rank and against overlap `Pi = 1`.
 
 ## Decisions
 
-1. Overlap block: frozen-only `G_F` (new temporary `PP_F`), not `G` through `PP_snk`.
-2. Both paths get the option. Non-overlap uses `M = T^dag` with `PP_sep`.
-3. `num_intermediate_projectors` = total singular vectors per projector slice.
-4. Basis computed in-line once per run; singular values logged to XML. Not written to disk.
-5. Randomized SVD with Gram-matrix orthonormalization. Dense steps use `SB::svd`.
-6. (2026-10-22) Default `svd_power_iterations` = 2, from the toy table above.
+1. Overlap block: frozen-only `G_F`, not `G` through `PP_snk`.
+2. Both paths supported. Non-overlap uses `M = T^dag`.
+3. `num_intermediate_projectors` = spin-colour vectors per projector slice used by the
+   prop run; the file can hold more.
+4. (2026-10-25) The basis is computed by its own measurement and written to a file; the
+   prop measurement reads it. File size is not a concern.
+5. Randomized SVD with Gram-matrix orthonormalization; dense steps use `SB::svd`.
+6. Default power iterations = 2.
+7. (2026-10-25) Stout fermion states are out of scope; tests use simple fermion states.
+8. (2026-10-25) The prop measurement only reads the basis from a file; no in-line fallback.
+9. (2026-10-25) Any metadata mismatch throws, including the fermion action.
+10. (2026-10-25) The file stores the code's even-odd layout (`cxyzXsnt`).
+11. (2026-10-26) No plaquette / gauge-configuration check: the plaquette is neither stored
+    in the file nor compared. The other metadata checks stay.
 
 ## Open
 
-- XML tag name: the request was `Projector_Type`. Existing `NamedObject` tags are
-  lower snake case, so this uses `projector_type`. Change it if the capitalized form is preferred.
-- Read slice for the overlap block: q = c1+fw-1 (sink-only buffer, every path to the sink
-  crosses it) vs c1+fw (first sink-active slice, more filtering, but `D_F` would then
-  reach an active slice). The implementation uses c1+fw-1.
-- Slab-solve tolerance: the basis probably does not need the production tolerance.
-  It uses `invParam` as-is for now.
-- Two-level use: storing the basis (with the frozen-field checksum) is a follow-up.
+- XML tag name `projector_type` (the request said `Projector_Type`); lower snake case
+  kept to match the other `NamedObject` tags.

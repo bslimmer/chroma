@@ -2015,6 +2015,7 @@ if( Chroma_ENABLE_SUPERBBLAS )
      meas/inline/hadron/inline_disco_prob_defl_superb_w.h
      meas/inline/hadron/inline_disco_prob_3d_defl_superb_w.h
      meas/inline/hadron/inline_prop_and_matelem_distillation_superb_w.h
+     meas/inline/hadron/inline_edge_svd_projectors_superb_w.h
      util/ferm/factorized_distillation.h
      meas/inline/hadron/inline_unsmeared_hadron_node_distillation_superb_w.h
      meas/inline/hadron/inline_baryon_matelem_colorvec_superb_w.h
@@ -2028,6 +2029,7 @@ if( Chroma_ENABLE_SUPERBBLAS )
      meas/inline/hadron/inline_disco_prob_defl_superb_w.cc
      meas/inline/hadron/inline_disco_prob_3d_defl_superb_w.cc
      meas/inline/hadron/inline_prop_and_matelem_distillation_superb_w.cc
+     meas/inline/hadron/inline_edge_svd_projectors_superb_w.cc
      util/ferm/factorized_distillation.cc
      meas/inline/hadron/inline_unsmeared_hadron_node_distillation_superb_w.cc
      meas/inline/hadron/inline_baryon_matelem_colorvec_superb_w.cc 

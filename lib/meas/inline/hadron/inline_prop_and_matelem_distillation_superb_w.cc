@@ -127,23 +127,10 @@ void read(XMLReader &xml, const std::string &path,
                              input.projector_type + "'");
   }
 
-  input.svd_oversampling = 16;
-  if (inputtop.count("svd_oversampling") == 1) {
-    read(inputtop, "svd_oversampling", input.svd_oversampling);
-  }
-  if (input.svd_oversampling < 0)
-    throw std::runtime_error("svd_oversampling should be >= 0");
-
-  input.svd_power_iterations = 2;
-  if (inputtop.count("svd_power_iterations") == 1) {
-    read(inputtop, "svd_power_iterations", input.svd_power_iterations);
-  }
-  if (input.svd_power_iterations < 0)
-    throw std::runtime_error("svd_power_iterations should be >= 0");
-
-  input.svd_seed = 11;
-  if (inputtop.count("svd_seed") == 1) {
-    read(inputtop, "svd_seed", input.svd_seed);
+  // Basis file written by EDGE_SVD_PROJECTORS_SUPERB (singular_vectors only)
+  input.svd_basis_file.clear();
+  if (inputtop.count("svd_basis_file") == 1) {
+    read(inputtop, "svd_basis_file", input.svd_basis_file);
   }
 }
 
@@ -182,9 +169,7 @@ void write(XMLWriter &xml, const std::string &path,
   // Only echoed for the non-default type, so default output XML is unchanged
   if (input.projector_type != "distillation_vecs") {
     write(xml, "projector_type", input.projector_type);
-    write(xml, "svd_oversampling", input.svd_oversampling);
-    write(xml, "svd_power_iterations", input.svd_power_iterations);
-    write(xml, "svd_seed", input.svd_seed);
+    write(xml, "svd_basis_file", input.svd_basis_file);
   }
 
   pop(xml);
@@ -455,17 +440,20 @@ projectOnSlices(const SB::MultipleLatticeFermions &psi,
 
 //----------------------------------------------------------------------------
 // Edge-SVD boundary projectors (projector_type = singular_vectors)
-// See specs/hier/factorized_prop_svd_projectors.md
+// See specs/hier/factorized_prop_svd_projectors.md. The basis is computed by
+// EDGE_SVD_PROJECTORS_SUPERB and read from its file; the shared code lives in
+// util/ferm/factorized_distillation.{h,cc}.
 //----------------------------------------------------------------------------
 
-//! Fields restricted to one time slice, order cxyztXns (t extent 1, n = columns)
-using EdgeSVDSliceTensor = SB::Tensor<Nd + 4, SB::Complex>;
-//! Orthonormal projector vectors per projector slice
-using EdgeSVDBasis = std::map<int, EdgeSVDSliceTensor>;
-//! Linear map on a set of lattice fermions
-using EdgeSVDFermionMap = std::function<SB::MultipleLatticeFermions(
-    const SB::MultipleLatticeFermions &)>;
-using EdgeSVDReal = SB::Complex::value_type;
+using FactorizedDistillation::checkEdgeSVDBasisInfo;
+using FactorizedDistillation::EdgeSVDBasis;
+using FactorizedDistillation::EdgeSVDBasisInfo;
+using FactorizedDistillation::EdgeSVDSlices;
+using FactorizedDistillation::EdgeSVDSliceTensor;
+using FactorizedDistillation::edgeSVDSlices;
+using FactorizedDistillation::nonOverlapCutField;
+using FactorizedDistillation::readEdgeSVDBasis;
+using FactorizedDistillation::readEdgeSVDBasisInfo;
 
 //! Spin-colour projector on the given time slices
 /*!
@@ -499,232 +487,6 @@ projectOnSlicesSV(const SB::MultipleLatticeFermions &psi,
                       .kvslice_from_size({{'t', t}}, {{'t', 1}}));
   }
   return projected;
-}
-
-//! New zeroed slice tensor with n columns
-static EdgeSVDSliceTensor newEdgeSVDSliceTensor(int n) {
-  EdgeSVDSliceTensor r(
-      "cxyztXns",
-      SB::latticeSize<Nd + 4>("cxyztXns", {{'t', 1}, {'n', n}}),
-      SB::OnDefaultDevice, SB::OnEveryone);
-  r.set_zero();
-  return r;
-}
-
-//! Gram matrix (A^dag B)(m,n), contracting colour, space and spin
-static SB::Tensor<2, SB::Complex> edgeSVDGram(const EdgeSVDSliceTensor &A,
-                                               const EdgeSVDSliceTensor &B) {
-  return SB::contract<2>(A.conj().rename_dims({{'n', 'm'}}), B, "cxyztXs");
-}
-
-//! Eigenpairs of a Hermitian PSD Gram matrix C (labels "mn") with SB::svd
-/*!
- * Returns the eigenvectors on host and replicated (labels "m^") and the
- * eigenvalues in descending order. The factorization is done once by superbblas
- * and then replicated, so every rank uses the same vectors.
- */
-static void edgeSVDGramEig(const SB::Tensor<2, SB::Complex> &C,
-                           SB::Tensor<2, SB::Complex> &u_h,
-                           std::vector<double> &lambda) {
-  auto svd_res = SB::svd<2, 1, 2>(C, "m", "n", '^');
-  u_h = std::get<0>(svd_res).make_sure(SB::none, SB::OnHost,
-                                       SB::OnEveryoneReplicated);
-  auto s_h = std::get<1>(svd_res).make_sure(SB::none, SB::OnHost,
-                                            SB::OnEveryoneReplicated);
-  const int k = s_h.kvdim().at('^');
-  lambda.resize(k);
-  for (int j = 0; j < k; ++j)
-    lambda[j] = (double)s_h.get({j});
-}
-
-//! Y * X, with X a k x r matrix stored column-major; the result has r columns
-/*!
- * `C_like` is a small tensor produced by SB::contract from Y; X is placed with
- * the same device and distribution before contracting with Y.
- */
-static EdgeSVDSliceTensor
-edgeSVDTimesSmall(const EdgeSVDSliceTensor &Y,
-                  const SB::Tensor<2, SB::Complex> &C_like,
-                  const std::vector<SB::Complex> &X, int k, int r) {
-  if (Y.kvdim().at('n') != k)
-    throw std::runtime_error("edgeSVDTimesSmall: inconsistent column count");
-  SB::Tensor<2, SB::Complex> X_h("nm", SB::Coor<2>{k, r}, SB::OnHost,
-                                 SB::OnEveryoneReplicated);
-  for (int j = 0; j < r; ++j)
-    for (int i = 0; i < k; ++i)
-      X_h.set({i, j}, X[i + k * j]);
-  auto Xd = C_like.like_this<2>("nm", {{'n', k}, {'m', r}});
-  X_h.copyTo(Xd);
-  return SB::contract<Nd + 4>(Y, Xd, "n").rename_dims({{'m', 'n'}});
-}
-
-//! Orthonormalize the columns of Y (Cholesky-QR through the Gram matrix, twice)
-/*!
- * Directions with eigenvalue below rel_tol * largest are dropped, so the result
- * can have fewer columns than Y.
- */
-static EdgeSVDSliceTensor edgeSVDOrthonormalize(const EdgeSVDSliceTensor &Y,
-                                                double rel_tol) {
-  EdgeSVDSliceTensor Q = Y;
-  for (int pass = 0; pass < 2; ++pass) {
-    auto C = edgeSVDGram(Q, Q);
-    SB::Tensor<2, SB::Complex> u_h;
-    std::vector<double> lambda;
-    edgeSVDGramEig(C, u_h, lambda);
-    const int k = lambda.size();
-    if (k == 0 || !(lambda[0] > 0))
-      throw std::runtime_error("edge SVD: the sketch is zero");
-    int r = 0;
-    while (r < k && lambda[r] > rel_tol * lambda[0])
-      ++r;
-    std::vector<SB::Complex> X(k * r);
-    for (int j = 0; j < r; ++j) {
-      const SB::Complex sc((EdgeSVDReal)(1.0 / std::sqrt(lambda[j])));
-      for (int i = 0; i < k; ++i)
-        X[i + k * j] = u_h.get({i, j}) * sc;
-    }
-    Q = edgeSVDTimesSmall(Q, C, X, k, r);
-  }
-  return Q;
-}
-
-//! out[i] = op(X[i] placed on in_slices[i]) read on out_slices[i]
-/*!
- * The op is block-diagonal over the frozen intervals, so column j of every X[i]
- * goes into the same field and all intervals share the solves. When the column
- * counts differ, the shorter sets repeat earlier columns (outputs dropped), so
- * no source is ever zero. Fields are built `batch` columns at a time.
- */
-static std::vector<EdgeSVDSliceTensor>
-edgeSVDApply(const EdgeSVDFermionMap &op, const std::vector<EdgeSVDSliceTensor> &X,
-             const std::vector<int> &in_slices,
-             const std::vector<int> &out_slices, int batch) {
-  const int ni = X.size();
-  std::vector<int> ncols(ni);
-  int nmax = 0;
-  for (int i = 0; i < ni; ++i) {
-    ncols[i] = X[i].kvdim().at('n');
-    nmax = std::max(nmax, ncols[i]);
-  }
-  std::vector<EdgeSVDSliceTensor> out(ni);
-  for (int i = 0; i < ni; ++i)
-    out[i] = newEdgeSVDSliceTensor(ncols[i]);
-
-  for (int b0 = 0; b0 < nmax; b0 += batch) {
-    const int nb = std::min(batch, nmax - b0);
-    auto x = returnNLatticeFermions(nb);
-    for (int j = 0; j < nb; ++j)
-      for (int i = 0; i < ni; ++i)
-        X[i]
-            .kvslice_from_size({{'n', (b0 + j) % ncols[i]}}, {{'n', 1}})
-            .copyTo(SB::asTensorView(*x[j]).kvslice_from_size(
-                {{'t', in_slices[i]}}, {{'t', 1}}));
-    auto y = op(x);
-    x.clear();
-    for (int i = 0; i < ni; ++i) {
-      if (b0 >= ncols[i])
-        continue;
-      const int nk = std::min(nb, ncols[i] - b0);
-      toSBTensor(SB::MultipleLatticeFermions(y.begin(), y.begin() + nk),
-                 out_slices[i], 1)
-          .copyTo(out[i].kvslice_from_size({{'n', b0}}, {{'n', nk}}));
-    }
-  }
-  return out;
-}
-
-//! Edge-SVD projector basis
-/*!
- * Top-`rank` right singular vectors, on the slices p_slices[i], of an operator
- * M that maps p_slices[i] -> q_slices[i] block-diagonally over the frozen
- * intervals. Randomized SVD (Halko-Martinsson-Tropp):
- *   Y = M^dag Omega (Omega Gaussian on q, rank + oversampling columns),
- *   power_its times Y <- M^dag M orth(Y), Q = orth(Y),
- *   Z = M Q, Z^dag Z = W Sigma^2 W^dag, phi = Q W[:, :rank].
- * Returns phi per p slice; fills the Ritz singular values and the max deviation
- * of phi^dag phi from the identity.
- */
-static EdgeSVDBasis computeEdgeSVDBasis(
-    const EdgeSVDFermionMap &M, const EdgeSVDFermionMap &Mdag,
-    const std::vector<int> &p_slices, const std::vector<int> &q_slices,
-    int rank, int oversampling, int power_its, int seed_value, int batch,
-    std::map<int, std::vector<double>> &sing_vals,
-    std::map<int, double> &ortho_err) {
-  const int ni = p_slices.size();
-  const int k = rank + oversampling;
-  const double rel_tol = 100 * std::numeric_limits<EdgeSVDReal>::epsilon();
-
-  // Gaussian probes on the q slices; the global RNG state is restored afterwards
-  std::vector<EdgeSVDSliceTensor> Omega(ni);
-  for (int i = 0; i < ni; ++i)
-    Omega[i] = newEdgeSVDSliceTensor(k);
-  {
-    Seed saved_seed;
-    QDP::RNG::savern(saved_seed);
-    Seed svd_seed = seed_value;
-    QDP::RNG::setrn(svd_seed);
-    for (int j = 0; j < k; ++j) {
-      auto eta = returnNLatticeFermions(1);
-      gaussian(*eta[0]);
-      for (int i = 0; i < ni; ++i)
-        toSBTensor(eta, q_slices[i], 1)
-            .copyTo(Omega[i].kvslice_from_size({{'n', j}}, {{'n', 1}}));
-    }
-    QDP::RNG::setrn(saved_seed);
-  }
-
-  // Range sketch on the p slices
-  auto Y = edgeSVDApply(Mdag, Omega, q_slices, p_slices, batch);
-  Omega.clear();
-  for (int it = 0; it < power_its; ++it) {
-    for (int i = 0; i < ni; ++i)
-      Y[i] = edgeSVDOrthonormalize(Y[i], rel_tol);
-    auto Z = edgeSVDApply(M, Y, p_slices, q_slices, batch);
-    Y = edgeSVDApply(Mdag, Z, q_slices, p_slices, batch);
-  }
-  std::vector<EdgeSVDSliceTensor> Q(ni);
-  for (int i = 0; i < ni; ++i) {
-    Q[i] = edgeSVDOrthonormalize(Y[i], rel_tol);
-    if (Q[i].kvdim().at('n') < rank)
-      throw std::runtime_error(
-          "edge SVD: the sketch on slice " + std::to_string(p_slices[i]) +
-          " has numerical rank " + std::to_string(Q[i].kvdim().at('n')) +
-          " < num_intermediate_projectors = " + std::to_string(rank));
-  }
-  Y.clear();
-
-  // Rayleigh-Ritz
-  auto Z = edgeSVDApply(M, Q, p_slices, q_slices, batch);
-  EdgeSVDBasis basis;
-  for (int i = 0; i < ni; ++i) {
-    auto C = edgeSVDGram(Z[i], Z[i]);
-    SB::Tensor<2, SB::Complex> u_h;
-    std::vector<double> lambda;
-    edgeSVDGramEig(C, u_h, lambda);
-    const int kq = lambda.size();
-    std::vector<SB::Complex> X(kq * rank);
-    for (int j = 0; j < rank; ++j)
-      for (int l = 0; l < kq; ++l)
-        X[l + kq * j] = u_h.get({l, j});
-    auto phi = edgeSVDTimesSmall(Q[i], C, X, kq, rank);
-
-    std::vector<double> sv(kq);
-    for (int j = 0; j < kq; ++j)
-      sv[j] = std::sqrt(std::max(lambda[j], 0.0));
-    sing_vals[p_slices[i]] = sv;
-
-    auto G = edgeSVDGram(phi, phi).make_sure(SB::none, SB::OnHost,
-                                             SB::OnEveryoneReplicated);
-    double err = 0;
-    for (int a = 0; a < rank; ++a)
-      for (int b = 0; b < rank; ++b)
-        err = std::max(err, (double)std::abs(G.get({a, b}) -
-                                             SB::Complex(a == b ? 1 : 0)));
-    ortho_err[p_slices[i]] = err;
-
-    basis[p_slices[i]] = phi;
-  }
-  return basis;
 }
 
 // Real work done here
@@ -987,31 +749,20 @@ void InlineMeas::func(unsigned long update_no, XMLWriter &xml_out) {
               "projector_type singular_vectors: num_intermediate_projectors "
               "should be <= 6 V3 (the spin half that the hop passes) = " +
               std::to_string(6 * V3));
+        if (params.named_obj.svd_basis_file.empty())
+          throw std::runtime_error(
+              "projector_type singular_vectors needs svd_basis_file (written "
+              "by EDGE_SVD_PROJECTORS_SUPERB)");
       }
 
       if (!overlapping) {
         // Enforce open boundary conditions through gauge link zeroing
-        // Zero timeslices where the active zone reaches the boundary
-        multi1d<LatticeColorMatrix> u_sep = u;
-
-        // Assuming 2 regions:
-        // Moving measurement D00 one slice in from frozen region
-        // Eliminates clover term crossing into active regions
-        // Note this assumes a boundary width of at least 3; enforced with error
-        // handling
-        for (int i = 0; i < geometry.plan.child0_frozen_local_intervals.size();
-             i++) {
-          // TODO:Handling for end of lattice below?
-          u_sep = zeroTemporalLinksOnSlice(
-              u_sep,
-              SB::normalize_coor(
-                  geometry.plan.child0_frozen_local_intervals[i].t_start, Lt));
-          u_sep = zeroTemporalLinksOnSlice(
-              u_sep, geometry.plan.child0_frozen_local_intervals[i].t_end - 1);
-          // std::cout << "Freezing t links on slice: " <<
-          // SB::normalize_coor(geometry.plan.child0_frozen_local_intervals[i].t_start
-          // - 1, Lt)  << std::endl;
-        }
+        // Zero timeslices where the active zone reaches the boundary.
+        // Assuming 2 regions: D00 sits one slice in from each frozen boundary,
+        // so the clover term does not cross into the active regions (needs a
+        // frozen width of at least 3). Shared with EDGE_SVD_PROJECTORS_SUPERB.
+        multi1d<LatticeColorMatrix> u_sep =
+            nonOverlapCutField(u, geometry, Lt);
 
         // SB::asTensorView(u_sep[3]).print("u_sep");
         // Printing without even/odd ordering
@@ -1125,151 +876,48 @@ void InlineMeas::func(unsigned long update_no, XMLWriter &xml_out) {
       auto state(S_f->createState(u));
       LinearOperator<LatticeFermion> *fLinOp = S_f->genLinOp(state);
 
-      // Edge-SVD projector basis: computed once, before the t_source loop.
-      // Only the projector vectors change; the chain below is untouched.
+      // Edge-SVD projector basis: read once, before the t_source loop, from
+      // the file written by EDGE_SVD_PROJECTORS_SUPERB. Only the projector
+      // vectors change; the chain below is untouched.
       EdgeSVDBasis sv_basis;
       if (sv_projector && use_projector) {
         StopWatch sv_watch;
         sv_watch.reset();
         sv_watch.start();
 
-        const multi1d<GaugeSubdomainSplitInterval> &fi =
-            geometry.plan.child0_frozen_local_intervals;
-        if (fi.size() != 2)
-          throw std::runtime_error(
-              "projector_type singular_vectors: expected 2 frozen intervals");
-
-        auto to_m = [](const std::vector<int> &v) {
-          multi1d<int> r(v.size());
-          for (int i = 0; i < v.size(); ++i)
-            r[i] = v[i];
-          return r;
-        };
-        auto restrict_to = [&](const SB::MultipleLatticeFermions &x,
-                               const std::vector<int> &slices) {
-          return restrictToTimeslices(x, to_m(slices), decay_dir);
-        };
-        // D (PLUS) or D^dag (MINUS) on the uncut field
-        auto apply_D = [&](const SB::MultipleLatticeFermions &x,
-                           PlusMinus isign) {
-          auto y = returnNLatticeFermions(x.size());
-          for (int i = 0; i < x.size(); ++i)
-            (*fLinOp)(*y[i], *x[i], isign);
-          return y;
-        };
-        auto apply_g5 = [&](const SB::MultipleLatticeFermions &x) {
-          auto y = returnNLatticeFermions(x.size());
-          for (int i = 0; i < x.size(); ++i)
-            *y[i] = Gamma(Ns * Ns - 1) * (*x[i]);
-          return y;
-        };
-        auto solve_with = [&](const SB::ChimeraSolver &PP,
-                              const SB::MultipleLatticeFermions &x) {
-          auto y = returnNLatticeFermions(x.size());
-          SB::doInversion(
-              PP, y,
-              Chroma::SB::ConstMultipleLatticeFermions(x.begin(), x.end()),
-              max_rhs);
-          return y;
-        };
-
-        // Per frozen interval: p = projector slice, q = far slice, and the
-        // two intermediate slices (a, b) of the block. Basis = top right
-        // singular vectors on p of M : p -> q.
-        std::vector<int> p_sl, q_sl, a_sl, b_sl;
-        EdgeSVDFermionMap M, Mdag;
-        std::unique_ptr<SB::ChimeraSolver> PP_F;
-        if (!overlapping) {
-          // T = R_p D R_{e_p} D00^-1 R_{e_s} D R_q, Pi acts on its output:
-          // left singular vectors of T = right singular vectors of M = T^dag.
-          // Same projector slices as the chain: {t_end(F1), 0}.
-          if (fi[0].t_start != 0)
-            throw std::runtime_error(
-                "projector_type singular_vectors: the first frozen interval "
-                "must start at t = 0");
-          for (int i = 0; i < 2; ++i)
-            if (fi[i].t_end - fi[i].t_start + 1 < 3)
-              throw std::runtime_error(
-                  "projector_type singular_vectors: frozen width must be >= 3");
-          p_sl = {fi[1].t_end, fi[0].t_start};
-          a_sl = {fi[1].t_end - 1, fi[0].t_start + 1}; // e_p
-          b_sl = {fi[1].t_start + 1, fi[0].t_end - 1}; // e_s
-          q_sl = {fi[1].t_start, fi[0].t_end};
-          // M y = R_q D^dag R_{e_s} g5 D00^-1 g5 R_{e_p} D^dag y
-          M = [&](const SB::MultipleLatticeFermions &y) {
-            auto v = restrict_to(apply_D(y, MINUS), a_sl);
-            v = apply_g5(solve_with(*PP_sep, apply_g5(v)));
-            v = restrict_to(v, b_sl);
-            return restrict_to(apply_D(v, MINUS), q_sl);
-          };
-          // M^dag x = R_p D R_{e_p} D00^-1 R_{e_s} D x
-          Mdag = [&](const SB::MultipleLatticeFermions &x) {
-            auto v = restrict_to(apply_D(x, PLUS), b_sl);
-            v = restrict_to(solve_with(*PP_sep, v), a_sl);
-            return restrict_to(apply_D(v, PLUS), p_sl);
-          };
-        } else {
-          // G_F = R_q D_F^-1 R_{w1} D, Pi acts on its input (p = w2).
-          // D_F: frozen-only slabs [0, fw-2] and [c1+1, c1+fw-1].
-          const int fw = fi[0].t_end - fi[0].t_start + 1;
-          const int c1 = fi[1].t_start;
-          p_sl = ov_proj_slices;    // w2 = {fw-1, c1}
-          a_sl = ov_hop_slices;     // w1 = {fw-2, c1+1}
-          q_sl = {0, c1 + fw - 1};  // sink-only buffer slices
-          multi1d<LatticeColorMatrix> u_F = u;
-          for (int t : {c1, c1 + fw - 1, fw - 2, Lt - 1})
-            u_F = zeroTemporalLinksOnSlice(u_F, t, decay_dir);
-          PP_F.reset(new SB::ChimeraSolver(params.param.prop.fermact,
-                                           params.param.prop.invParam, u_F));
-          // M x = R_q D_F^-1 R_{w1} D x
-          M = [&](const SB::MultipleLatticeFermions &x) {
-            auto v = restrict_to(apply_D(x, PLUS), a_sl);
-            return restrict_to(solve_with(*PP_F, v), q_sl);
-          };
-          // M^dag y = R_p D^dag R_{w1} g5 D_F^-1 g5 y
-          Mdag = [&](const SB::MultipleLatticeFermions &y) {
-            auto v = apply_g5(solve_with(*PP_F, apply_g5(y)));
-            v = restrict_to(v, a_sl);
-            return restrict_to(apply_D(v, MINUS), p_sl);
-          };
-        }
-
         const int R = params.named_obj.num_intermediate_projectors;
-        std::map<int, std::vector<double>> sv_values;
-        std::map<int, double> sv_ortho_err;
-        sv_basis = computeEdgeSVDBasis(
-            M, Mdag, p_sl, q_sl, R, params.named_obj.svd_oversampling,
-            params.named_obj.svd_power_iterations, params.named_obj.svd_seed,
-            std::max(1, max_rhs), sv_values, sv_ortho_err);
-        PP_F.reset(); // free the temporary D_F solver before the main loop
+        const std::string &sv_file = params.named_obj.svd_basis_file;
+        const EdgeSVDSlices sv_slices = edgeSVDSlices(geometry, overlapping, Lt);
+
+        // The file must match this run's lattice, geometry and fermion action
+        const EdgeSVDBasisInfo sv_info = readEdgeSVDBasisInfo(sv_file);
+        checkEdgeSVDBasisInfo(sv_info, sv_slices, overlapping, decay_dir, R,
+                              params.param.prop.fermact.xml);
+
+        // First R vectors of each projector slice
+        sv_basis = readEdgeSVDBasis(sv_file, sv_slices.p, R);
         sv_watch.stop();
 
-        QDPIO::cout << name << ": edge-SVD projectors, rank " << R
-                    << ", time " << sv_watch.getTimeInSeconds() << " secs"
-                    << std::endl;
+        QDPIO::cout << name << ": edge-SVD projectors from " << sv_file
+                    << ", using " << R << " of " << sv_info.rank
+                    << " vectors, read time " << sv_watch.getTimeInSeconds()
+                    << " secs" << std::endl;
         push(xml_out, "EdgeSVDProjectors");
-        write(xml_out, "rank", R);
-        write(xml_out, "oversampling", params.named_obj.svd_oversampling);
-        write(xml_out, "power_iterations",
-              params.named_obj.svd_power_iterations);
-        write(xml_out, "seed", params.named_obj.svd_seed);
-        write(xml_out, "time_secs", sv_watch.getTimeInSeconds());
-        for (int i = 0; i < p_sl.size(); ++i) {
-          const std::vector<double> &sv = sv_values.at(p_sl[i]);
-          multi1d<double> sv_m(sv.size());
-          for (int j = 0; j < sv.size(); ++j)
-            sv_m[j] = sv[j];
-          QDPIO::cout << name << ":   projector slice " << p_sl[i]
-                      << " (far slice " << q_sl[i] << "): sigma_1 = "
-                      << (sv.size() > 0 ? sv[0] : 0.0) << ", sigma_R/sigma_1 = "
+        write(xml_out, "svd_basis_file", sv_file);
+        write(xml_out, "rank_used", R);
+        write(xml_out, "rank_in_file", sv_info.rank);
+        write(xml_out, "read_time_secs", sv_watch.getTimeInSeconds());
+        for (int i = 0; i < sv_info.projector_slices.size(); ++i) {
+          const std::vector<double> &sv = sv_info.singular_values[i];
+          QDPIO::cout << name << ":   projector slice "
+                      << sv_info.projector_slices[i] << ": sigma_R/sigma_1 = "
                       << (sv.size() >= R && sv[0] > 0 ? sv[R - 1] / sv[0] : 0.0)
-                      << ", |phi^dag phi - 1|_max = " << sv_ortho_err.at(p_sl[i])
                       << std::endl;
           push(xml_out, "elem");
-          write(xml_out, "projector_slice", p_sl[i]);
-          write(xml_out, "far_slice", q_sl[i]);
-          write(xml_out, "singular_values", sv_m);
-          write(xml_out, "orthonormality_error", sv_ortho_err.at(p_sl[i]));
+          write(xml_out, "projector_slice", sv_info.projector_slices[i]);
+          write(xml_out, "far_slice", sv_info.far_slices[i]);
+          write(xml_out, "sigma_1", sv.size() > 0 ? sv[0] : 0.0);
+          write(xml_out, "sigma_R", sv.size() >= R ? sv[R - 1] : 0.0);
           pop(xml_out);
         }
         pop(xml_out);
